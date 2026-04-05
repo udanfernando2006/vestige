@@ -6,32 +6,32 @@
 
 ## What It Does
 
-You define which books and series to track in a single YAML file — no code changes required. A scraper runs automatically (every 6 hours), checks each configured store for each configured book, writes results to PostgreSQL, uploads logs to AWS S3, and fires notifications the moment a tracked book comes back in stock.
+Vestige tracks book availability across multiple Sri Lankan online bookstores. Users define which books and series to track in a single YAML file — no code changes required. The scraper runs automatically (every 6 hours), checks each configured store for each configured book, writes results to PostgreSQL, uploads logs to AWS S3, and sends notifications the moment a tracked book comes back in stock.
 
 **Core features:**
 
 - 📚 **Config-driven** — Track books and stores via YAML. Add new books without touching code.
 - 🔄 **Scheduled scraping** — Runs on a cron schedule (default: every 6 hours)
-- 💾 **Immutable history** — Every result is appended to PostgreSQL as a snapshot. You can query when a book came into stock or how availability has changed over time.
+- 💾 **Immutable history** — Every result is appended to PostgreSQL as a snapshot. Users can query when a book came into stock or how availability has changed over time.
 - 📤 **Audit logging** — Full scrape run results uploaded to AWS S3 for compliance and debugging
 - 🔔 **Instant notifications** — Email (+ optional Windows desktop notification) the moment availability status changes
-- 🎯 **Minimal scope** — No web dashboard, no real-time updates, no production infrastructure complexity. A learning project that uses production patterns at small scale.
+- 🎯 **Clean architecture** — No web dashboard, no real-time updates, no production infrastructure complexity. Demonstrates production patterns at appropriate scale.
 
 ---
 
-## What You'll Learn
+## Technologies Demonstrated
 
-This is a real project, not a tutorial. Build it to master:
+Vestige emphasizes infrastructure, automation, and cloud operations:
 
-| Skill            | Why It Matters                                                              |
-| ---------------- | --------------------------------------------------------------------------- |
-| **Python OOP**   | Write clean, extensible code with abstract base classes and the factory     |
-| **PostgreSQL**   | Move beyond NoSQL. Understand schemas, foreign keys, and append-only tables |
-| **Docker**       | Multi-stage builds, health checks, Compose for local dev                    |
-| **AWS**          | S3 for object storage, EC2 for hosting, IAM for secure credentials          |
-| **Kubernetes**   | Deploy as a CronJob. Learn scheduling, ConfigMaps, Secrets in context       |
-| **Linux**        | Server administration: systemd, SSH, file permissions, cron                 |
-| **Web Scraping** | BeautifulSoup for static HTML, Playwright for JavaScript-rendered pages     |
+| Layer                | Technology              | Skills Demonstrated                                             |
+| -------------------- | ----------------------- | --------------------------------------------------------------- |
+| **Orchestration**    | Kubernetes CronJob      | Pod scheduling, declarative configs, health management          |
+| **Containerization** | Docker, Compose         | Multi-stage builds, image optimization, local dev environments  |
+| **Cloud**            | AWS (S3, EC2, IAM)      | Object storage, compute instances, identity & access management |
+| **Configuration**    | ConfigMaps, Secrets     | Externalized config, secret management, immutable deployments   |
+| **Database**         | PostgreSQL + SQLAlchemy | Schema design, data persistence, ORM patterns                   |
+| **Automation**       | Python, bash            | Scripting, API integration, scheduled tasks                     |
+| **Monitoring**       | Logging & S3            | Audit trails, structured logging, compliance                    |
 
 ---
 
@@ -127,12 +127,8 @@ vestige/
 │   └── pvc.yaml                     # Persistent storage for Postgres
 │
 ├── docker-compose.yml               # Local dev: scraper + postgres
-├── books_config.yaml                # Your book/series/store definitions
+├── books_config.yaml                # Book/series/store configuration
 ├── .env.example                     # Template for environment variables
-├── DECISIONS.md                     # Architecture and design decisions
-├── docs/
-│   ├── vestige_guide.md             # Complete technical walkthrough
-│   └── vestige_learning_guide.md    # Learning roadmap by topic
 └── README.md                        # This file
 ```
 
@@ -155,7 +151,7 @@ cd vestige
 # Copy the example env file
 cp .env.example .env
 
-# Edit .env with your credentials (or use defaults for local dev)
+# Edit .env with credentials (or use defaults for local dev)
 ```
 
 ### 2. Define books to track
@@ -181,9 +177,9 @@ notifications:
     email:
         enabled: true
         smtp_host: "smtp.gmail.com"
-        smtp_user: "your-email@gmail.com"
+        smtp_user: "user-email@gmail.com"
         smtp_password: "${SMTP_PASSWORD}"
-        notify_to: "you@example.com"
+        notify_to: "recipient@example.com"
     desktop:
         enabled: true # Windows only
 ```
@@ -229,16 +225,6 @@ kubectl get cronjob -n book-tracker
 kubectl get jobs -n book-tracker --watch
 kubectl logs -n book-tracker job/<job-name>
 ```
-
----
-
-## Documentation
-
-| Document                                                    | Purpose                                                         |
-| ----------------------------------------------------------- | --------------------------------------------------------------- |
-| [vestige_guide.md](docs/vestige_guide.md)                   | Deep dive: architecture, data model, every technology explained |
-| [vestige_learning_guide.md](docs/vestige_learning_guide.md) | Learning roadmap: resources (YouTube, docs) organized by topic  |
-| [DECISIONS.md](DECISIONS.md)                                | Architectural decisions, risks, and rationale                   |
 
 ---
 
@@ -372,12 +358,7 @@ aws s3 cp s3://your-bucket/scrape-runs/2026-04-05T12:00:00Z.json - | jq '.'
 
 ## Contributing
 
-This is a learning project. Want to add features?
-
-1. Read [docs/vestige_guide.md](docs/vestige_guide.md) to understand the architecture
-2. Check [DECISIONS.md](DECISIONS.md) for existing design choices
-3. Open an issue or PR with your proposal
-4. Follow the [copilot-instructions.md](.github/copilot-instructions.md) for code style and assumptions
+Contributions are welcome. Please open an issue or PR with your proposal.
 
 ---
 
@@ -432,8 +413,6 @@ MIT
 
 ## Author
 
-Udan Fernando — Built as a learning project to master Python, PostgreSQL, Docker, Kubernetes, and AWS in ~2 weeks.
+**Udan Fernando**
 
-For questions, open an issue or check the [docs folder](docs/).
-
-**Start learning:** See [vestige_learning_guide.md](docs/vestige_learning_guide.md) for a structured roadmap of resources by topic.
+Vestige demonstrates production DevOps and cloud infrastructure skills: container orchestration with Kubernetes, infrastructure-as-code patterns, cloud service integration (AWS), and operational best practices (logging, configuration management, health checks). Built to showcase real-world deployment patterns in a pragmatic context.
