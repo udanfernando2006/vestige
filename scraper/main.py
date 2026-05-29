@@ -1,14 +1,16 @@
 import asyncio
 from pipeline.scraper import Scraper
 import json
+from dataclasses import asdict
 
-async def scrape_with_limit(semaphore, scraper, pair):
+async def scrape_with_limit(semaphore, pair):
     async with semaphore:
-        return await scraper.scrape(pair['url'], pair['selectors'])
+        scraper = Scraper(headless=True, wait_time=2)  # New instance per request
+        return await scraper.scrape(pair['url'], pair['selectors'], pair.get('wait_selectors'))
 
 async def main():
-    scraper = Scraper(headless=True, wait_time=2)
-    semaphore = asyncio.Semaphore(5)  # Max 5 concurrent
+    CONCURRENT_SCRAPERS = 5   # Max 5 concurrent
+    semaphore = asyncio.Semaphore(CONCURRENT_SCRAPERS)
     
     pairs = [
         {
@@ -20,7 +22,8 @@ async def main():
         },
         'price': {
             'selector': 'span.text-xl.font-bold.text-gray-900',
-            'direct_text': True
+            'direct_text': True,
+            'extract_numeric': True
         },
         'availability': {
             'selector': 'span.text-sm.text-green-600.font-semibold'
@@ -30,17 +33,68 @@ async def main():
             'then_next': 'dd'
         },
         'description': {
-            'selector': 'div.text-gray-700'
+            'selector': 'div.text-gray-700',
+            'preserve_semantics': True
         }
     }
     },
+    {
+        'url': 
+        'https://www.sarasavi.lk/product/the-witcher---the-last-wish-147323106x',
+        'wait_selectors': 
+        ['.ProductInner_productbox_details_price_discount__WKWSB'],
+        'selectors': {
+            'title': {
+                'selector': 'h1.section-heading'
+            },
+            'price': {
+                'selector': '.ProductInner_productbox_details_price_discount__WKWSB',
+                'extract_numeric': True
+            },
+            'availability': {
+                'selector': '.ProductInner_productinnerwrap_stock__VBeJJ'
+            },
+            'isbn': {
+                'find_by_text': ('span', 'ISBN 13'),
+                'then_next': 'td',
+                'extract_numeric': True
+            },
+            'description': {
+                'selector': '.para--black',
+                'preserve_semantics': True
+            }
+        }
+    },
+    {
+        'url': 
+        'https://jumpbooks.lk/product/the-last-wish-reissue-introducing-the-witcher-now-a-major-netflix-show/',
+        'selectors': {
+            'title': {
+                'selector': 'h1.product-title'
+            },
+            'price': {
+                'selector': 'p.price > span:nth-child(1)',
+                'extract_numeric': True
+            },
+            'availability': {
+                'selector': '.stock'
+            },
+            'isbn': {
+                'selector': '.sku'
+            },
+            'description': {
+                'selector': '.a-expander-partial-collapse-content',
+                'preserve_semantics': True
+            }
+        }
+    }
     ]
     
     results = await asyncio.gather(
-        *[scrape_with_limit(semaphore, scraper, pair) for pair in pairs]
+        *[scrape_with_limit(semaphore, pair) for pair in pairs]
     )
     return results
 
 if __name__ == "__main__":
     results = asyncio.run(main())
-    print(json.dumps(results, indent=2))
+    print(json.dumps([asdict(result) for result in results], indent=2, default=str))
