@@ -17,12 +17,12 @@ class Scraper:
     async def scrape(self, url, selectors, wait_selectors=None) -> dict:
         try:
             async with async_playwright() as self.p:
-                await self._setupBrowser()
-                await self._rateLimitWait()
-                await self._navigatePage(url, wait_selectors)
+                await self._setup_browser()
+                await self._rate_limit_wait()
+                await self._navigate_page(url, wait_selectors)
                 html = await self.page.content()
                 soup = BeautifulSoup(html, 'lxml')
-                extracted = await self._extractData(soup, selectors)
+                extracted = await self._extract_data(soup, selectors)
                 await self.browser.close()
 
                 result = AvailabilityResult(
@@ -32,10 +32,10 @@ class Scraper:
                 )
 
                 if extracted.get('price'):
-                    result.price = self.parsePrice(extracted['price'])
+                    result.price = self.parse_price(extracted['price'])
 
                 if extracted.get('availability'):
-                    result.in_stock = self.parseStockStatus(extracted['availability'])
+                    result.in_stock = self.parse_stock_status(extracted['availability'])
 
                 if result.in_stock is True:
                     result.status = "IN_STOCK"
@@ -51,7 +51,7 @@ class Scraper:
                 scraped_at=datetime.now(timezone.utc)
             )
 
-    async def _setupBrowser(self):
+    async def _setup_browser(self):
         self.browser = await self.p.chromium.launch(headless=self._headless,
             args=['--disable-blink-features=AutomationControlled'])
         self.page = await self.browser.new_page()
@@ -65,7 +65,7 @@ class Scraper:
         await self.page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
 
 
-    async def _navigatePage(self, url, wait_selectors=None):
+    async def _navigate_page(self, url, wait_selectors=None):
         # Navigate to the page
         await self.page.goto(url, timeout=60000)
         
@@ -79,7 +79,7 @@ class Scraper:
                 except:
                     pass  # Selector may not exist on this page
 
-    async def _extractData(self, soup, selector_config):
+    async def _extract_data(self, soup, selector_config):
         product_info = {}
         for field, selector in selector_config.items():
             item = None
@@ -119,10 +119,10 @@ class Scraper:
 
         return product_info
     
-    async def _rateLimitWait(self):
+    async def _rate_limit_wait(self):
         await asyncio.sleep(self._wait_time)
     
-    def parsePrice(self, raw_text: str):
+    def parse_price(self, raw_text: str):
         if not raw_text:
             return None
         
@@ -138,7 +138,7 @@ class Scraper:
                 return None
         return None
 
-    def parseStockStatus(self, raw_text: str):
+    def parse_stock_status(self, raw_text: str):
         if not raw_text:
             return None
         
@@ -155,7 +155,7 @@ class Scraper:
         # Unclear
         return None
 
-    def checkResponseStatus(self, status_code: int):
+    def check_response_status(self, status_code: int):
         if 400 <= status_code < 500:
             raise Exception(f"http_error_{status_code}")  # Client error
         elif 500 <= status_code < 600:
