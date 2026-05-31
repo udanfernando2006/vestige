@@ -2,7 +2,7 @@ import asyncio
 from pipeline.crawler import Crawler
 
 async def test_discover_search_endpoints():
-    crawler = Crawler(headless=False)  # headless=False to watch it work
+    crawler = Crawler(headless=False, timeout=90000)  # headless=False to watch it work
     
     stores = [
         "https://sarasavi.lk/",
@@ -19,12 +19,9 @@ async def test_discover_search_endpoints():
         
         print(f"Success: {result.get('success')}")
         print(f"Endpoint: {result.get('endpoint')}")
-        print(f"Param Name: {result.get('param_name')}")
-        print(f"Other Params: {result.get('other_params')}")
-        print(f"Best URL: {result.get('best_url')}")
-        print(f"All URLs:")
-        for url in result.get('all_urls', []):
-            print(f"  - {url}")
+        print(f"Param Names: {result.get('param_names')}")
+        print(f"Initial URL: {result.get('initial_url')}")
+        print(f"Final URL: {result.get('final_url')}")
         print(f"Error: {result.get('error')}")
 
 if __name__ == "__main__":
