@@ -1,7 +1,7 @@
 import asyncio
+import html2text
 
-
-from scraper.pipeline.llm_extractor import Extractor
+from pipeline.llm_extractor import Extractor
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
@@ -32,6 +32,7 @@ async def get_html(url):
                 pass  # Main content might load differently on some sites
 
             content = await page.content()
+            await browser.close()
             return content
 
     except Exception as e:
@@ -39,67 +40,89 @@ async def get_html(url):
         return None
     
 
-def test_extractor(url, html):
-    """Test the Extractor on a single URL."""
-    print(f"\n{'='*80}")
-    print(f"Testing: {url}")
-    print(f"{'='*80}\n")
-    
-    extractor = Extractor(url)
-    cleaned_html = extractor.clean_html(html)
-    
-    # Test price classification
-    print("🔍 Classifying PRICE node...")
-    price_result = extractor.classify_price_node(cleaned_html)
-    print(f"  Status: {price_result.get('reason') or 'SUCCESS'}")
-    print(f"  Selector: {price_result.get('selector')}")
-    print(f"  Answer: {price_result.get('answer')}")
-    print(f"  Confidence: {price_result.get('confidence'):.2f}\n")
-    
-    # Test stock classification
-    print("🔍 Classifying STOCK node...")
-    stock_result = extractor.classify_stock_node(cleaned_html)
-    print(f"  Status: {stock_result.get('reason') or 'SUCCESS'}")
-    print(f"  Selector: {stock_result.get('selector')}")
-    print(f"  Answer: {stock_result.get('answer')}")
-    print(f"  Confidence: {stock_result.get('confidence'):.2f}\n")
-    
-    # Validate selectors work on the HTML
-    print("✅ Validating selectors...")
-    if price_result.get('selector'):
-        try:
-            price_elem = cleaned_html.select_one(price_result['selector'])
-            if price_elem:
-                print(f"  Price selector WORKS: {price_elem.get_text(strip=True)[:50]}")
-            else:
-                print(f"  Price selector FAILED: No element found")
-        except Exception as e:
-            print(f"  Price selector ERROR: {e}")
-    
-    if stock_result.get('selector'):
-        try:
-            stock_elem = cleaned_html.select_one(stock_result['selector'])
-            if stock_elem:
-                print(f"  Stock selector WORKS: {stock_elem.get_text(strip=True)[:50]}")
-            else:
-                print(f"  Stock selector FAILED: No element found")
-        except Exception as e:
-            print(f"  Stock selector ERROR: {e}")
+def extract_clean_value(soup, selector: str, field_name: str) -> str:
+    """
+    Safely executes a CSS selector against the DOM tree. 
+    Converts complex content domains like description blocks into clean, 
+    structured Markdown, while maintaining neat string formats for inline tags.
+    """
+    if not selector:
+        return None
+        
+    element = soup.select_one(selector)
+    if not element:
+        return None
+        
+    # If dealing with complex structural blocks, use html2text to preserve Markdown formatting
+    if field_name.lower() in ["description", "product status / availability"]:
+        converter = html2text.HTML2Text()
+        
+        # --- Configure Converter Options ---
+        converter.ignore_links = False         # Keep links if they occur in description blocks
+        converter.ignore_emphasis = False      # Keep bold (** text **) and italics (* text *)
+        converter.ignore_images = True         # Drop layout tracker images/tracking pixels
+        converter.body_width = 0               # Prevent wrapping text at an arbitrary line break width
+        
+        # Turn the element back into raw HTML string and convert it
+        markdown_text = converter.handle(str(element))
+        return markdown_text.strip()
+        
+    # Standard fallback for clean flat properties (Title, Price, ISBN)
+    return element.get_text(strip=True)
 
 async def main():
     urls = [
         # "https://sarasavi.lk/product/the-witcher---the-last-wish-147323106x",
-        # "https://jumpbooks.lk/product/the-last-wish-reissue-introducing-the-witcher-now-a-major-netflix-show/",
+        "https://jumpbooks.lk/product/the-last-wish-reissue-introducing-the-witcher-now-a-major-netflix-show/",
         # "https://jeyabookcentre.com/item/75242-the-last-wish?srsltid=AfmBOoq0kjNyIWejlHCi2lFKboz48AyTO-7XHfzT01s_FneKvcGsQHz5",
         # "https://www.expo-graphic.com/books/The-Witcher---Ehe-Last-Wish-9781399611398/view",
         # "https://books.lk/product/the-last-wish-the-witcher/",
         # "https://mdgunasena.com/product/the-last-wish/",
         
             ]
+    
+    target_fields = ["title", "price", "stock status / availability", "description", "isbn"]
+
     for url in urls:
-        html = await get_html(url)
-        if html:
-            test_extractor(url, html)
+        print("\n" + "="*80)
+        print(f"Testing: {url}")
+        print("="*80)
+        
+        raw_html = await get_html(url)
+        if not raw_html:
+            print("❌ Exiting: HTML Payload content empty.")
+            continue
+            
+        extractor = Extractor(url)
+        cleaned_html = extractor.clean_html(raw_html)
+        
+        for field in target_fields:
+            print(f"🔍 Asking LLM for direct structure selector: '{field.upper()}'...")
+            
+            # The LLM looks at the unparsed context hierarchy natively
+            res = extractor.query_selector_from_html(cleaned_html, field)
+            
+            status = res["status"]
+            selector = res["selector"]
+            confidence = res["confidence"]
+            reason = res["reason"]
+            
+            print(f"  Status: {status}")
+            print(f"  Selector: {selector}")
+            print(f"  Confidence: {confidence:.2f}")
+            print(f"  Technical Logic: {reason}")
+            
+            # Verification Step using our structural formatting helper
+            if selector:
+                try:
+                    extracted_text = extract_clean_value(cleaned_html, selector, field)
+                    if extracted_text:
+                        print(f"  ✅ Verification Works: '{extracted_text[:90]}...'")
+                    else:
+                        print(f"  ❌ Verification Failed: Element found but text values returned empty.")
+                except Exception as e:
+                    print(f"  ❌ Verification Selector Error: {e}")
+            print("-" * 40)
 
 if __name__ == "__main__":
     asyncio.run(main())
