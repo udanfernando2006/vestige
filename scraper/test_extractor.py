@@ -61,7 +61,7 @@ async def test_extraction():
             print(f"⚠️ Warning: Target title '{target_book_title}' not found in raw HTML payload.")
             
         # 3. Instantiate Extractor and Clean HTML
-        extractor = Extractor(url)
+        extractor = Extractor({})
         print("🧹 Cleaning HTML payload...")
         cleaned_html = extractor.clean_html(raw_html)
         

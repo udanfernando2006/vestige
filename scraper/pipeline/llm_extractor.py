@@ -3,9 +3,9 @@ import os
 from openai import OpenAI
 from bs4 import BeautifulSoup, Comment
 
-SYSTEM_PROMPT = """You are a highly precise, data-focused extraction engine. Your only task is to convert raw semantic text layout data into structured JSON matching the requested schema. Do not write explanations, markdown syntax code blocks around the JSON object, or conversational replies. Return ONLY raw JSON."""
+SEMANTIC_SYSTEM_PROMPT = """You are a highly precise, data-focused extraction engine. Your only task is to convert raw semantic text layout data into structured JSON matching the requested schema. Do not write explanations, markdown syntax code blocks around the JSON object, or conversational replies. Return ONLY raw JSON."""
 
-USER_PROMPT_TEMPLATE = """Target Book Title: "{target_title}"
+SEMANTIC_USER_PROMPT = """Target Book Title: "{target_title}"
 
 Task: Read the following semantic HTML context and extract specific details for this target book.
 
@@ -28,12 +28,18 @@ Expected JSON Schema:
 HTML Content:
 {cleaned_html}"""
 
+
+SELECTOR_SYSTEM_PROMPT = """"""
+
+SELECTOR_USER_PROMPT = """"""
+
 class Extractor:
-    def __init__(self, url: str):
-        self._url = url
-        self.api_base = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
-        self.api_key = os.getenv("LLM_API_KEY", "ollama")
-        self.model_name = os.getenv("LLM_MODEL_NAME", "qwen2.5-coder:3b")
+    def __init__(self, config: dict):
+        self.engine = config.get("engine", "local") # 'local' or 'cloud'
+        self.api_base = config.get("api_base", "http://localhost:11434/v1")
+        self.api_key = config.get("api_key", "ollama")
+        self.model_name = config.get("model_name", "qwen2.5-coder:3b")
+
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
     def clean_html(self, html: str) -> str:
@@ -49,7 +55,7 @@ class Extractor:
         global_structural_elements = [
             'div#header', 'div#footer', '.site-header', '.site-footer', 
             '.top-bar', '.main-navigation', '.footer-widgets', '#sidebar-menu',
-            '.top-banner-fixed', '.bg-gray-900'
+            '.top-banner-fixed', '.bg-gray-900', '.cookie-notice', '#cookie-law-info-bar'
         ]
         for sel in global_structural_elements:
             for element in soup.select(sel):
@@ -69,20 +75,41 @@ class Extractor:
         for comment in comments:
             comment.decompose()
             
-        # Return cleaned text-dense output minimizing token footprint
+        if self.engine == "local":
+            # STRIP ATTRIBUTES: Local models need raw semantic layout to save VRAM 
+            # and avoid keyword distraction.
+            for tag in soup.find_all(True):
+                tag.attrs = {}
+        else:
+            # KEEP ATTRIBUTES: Cloud models need `class` and `id` tags 
+            # so they can generate accurate CSS selectors.
+            pass
+
         return soup.get_text(separator=" ", strip=True)
 
     def extract_details(self, cleaned_html: str, target_title: str) -> dict:
-        user_content = USER_PROMPT_TEMPLATE.format(
+        user_content = SEMANTIC_USER_PROMPT.format(
             target_title=target_title,
             cleaned_html=cleaned_html
         )
 
+        return self._call_llm(user_content, SEMANTIC_SYSTEM_PROMPT)
+
+
+    
+    def extract_selectors(self, cleaned_html: str, target_title: str) -> dict:
+        user_content = SELECTOR_USER_PROMPT.format(
+            target_title=target_title,
+            cleaned_html=cleaned_html
+        )
+        return self._call_llm(user_content, SELECTOR_SYSTEM_PROMPT)
+
+    def _call_llm(self, user_content: str, system_prompt: str) -> dict:
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ],
                 temperature=0.0,
@@ -91,10 +118,4 @@ class Extractor:
             
             return json.loads(response.choices[0].message.content.strip())
         except Exception as e:
-            return {
-                "error": f"Extraction failure: {e}",
-                "price": None,
-                "stock_status": None,
-                "description": None,
-                "isbn": None
-            }
+            return {"error": f"LLM Request Failure: {e}"}
