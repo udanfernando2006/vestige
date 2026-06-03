@@ -1,7 +1,6 @@
-import requests
 import asyncio
-import json
 import re
+import json
 import html2text
 from datetime import datetime, timezone
 
@@ -23,6 +22,7 @@ class Scraper:
                 html = await self.page.content()
                 soup = BeautifulSoup(html, 'lxml')
                 extracted = await self._extract_data(soup, selectors)
+                print(json.dumps(extracted, indent=2))
                 await self.browser.close()
 
                 result = AvailabilityResult(
@@ -69,7 +69,7 @@ class Scraper:
         # Navigate to the page
         await self.page.goto(url, timeout=60000)
         
-        await self.page.wait_for_load_state('domcontentloaded')
+        await self.page.wait_for_load_state('networkidle')
         
         # Wait for critical selectors if specified
         if wait_selectors:
@@ -79,44 +79,67 @@ class Scraper:
                 except:
                     pass  # Selector may not exist on this page
 
-    async def _extract_data(self, soup, selector_config):
+    async def _extract_data(self, soup: BeautifulSoup, selectors: dict) -> dict:
         product_info = {}
-        for field, selector in selector_config.items():
-            item = None
-            
-            # Handle special case: find element by text content
-            if 'find_by_text' in selector:
-                tag, text = selector['find_by_text']
-                for element in soup.find_all(tag):
-                    if text in element.get_text():
-                        item = element.find_next(selector.get('then_next'))
-                        break
-            else:
-                # Use CSS selector
-                css_selector = selector.get('selector')
-                if css_selector:
-                    item = soup.select_one(css_selector)
-            
-            # Extract text based on extraction method
-            if item:
-                if selector.get('direct_text'):
-                    # Get only the direct text (first child text node)
-                    text = item.contents[0].strip() if item.contents else None
-                    # Remove non-breaking spaces
-                    text = text.replace('\u00a0', ' ') if text else None
-                else:
-                    text = item.get_text(strip=True)
-
-                if selector.get('preserve_semantics'):
-                    h = html2text.HTML2Text()
-                    h.ignore_links = True
-                    h.ignore_images = True
-                    text = h.handle(item.decode_contents())
-                
-                product_info[field] = text
-            else:
+        
+        for field, config in selectors.items():
+            if not config:
                 product_info[field] = None
+                continue
+                
+            try:
+                element = None
+                
+                # 1. Handle TEXT LOOKUP FALLBACK strategy
+                if "find_by_text" in config:
+                    lookup = config["find_by_text"]
+                    if isinstance(lookup, (list, tuple)) and len(lookup) >= 2:
+                        target_tag, search_text = lookup[0], lookup[1]
+                        
+                        # Find the label element containing the target text identifier
+                        label_node = soup.find(target_tag, string=lambda t: t and search_text.lower() in t.lower())
+                        
+                        if label_node and config.get("then_next"):
+                            # Traversal strategy: step over to the next matching sibling element node
+                            element = label_node.find_next(config["then_next"])
+                        elif label_node:
+                            element = label_node
 
+                # 2. Handle STANDARD CSS SELECTOR strategy
+                elif "selector" in config and config["selector"]:
+                    selector_str = config["selector"]
+                    
+                    if config.get("direct_text"):
+                        # soup.select_one might return None, so we handle it gracefully below
+                        element = soup.select_one(selector_str)
+                    else:
+                        element = soup.select_one(selector_str)
+
+                # 3. Clean and Extract String Values
+                if element is not None:
+                    if config.get("preserve_semantics"):
+                        # Keep HTML structural text intact for descriptions
+                        extracted_value = str(element)
+                    elif config.get("direct_text"):
+                        # Capture only immediate node character structures
+                        extracted_value = "".join(element.find_all(text=True, recursive=False)).strip()
+                        if not extracted_value:
+                            extracted_value = element.get_text().strip()
+                    else:
+                        extracted_value = element.get_text().strip()
+                        
+                    # Universal Sanity Cleanup Layer: strip out leading/trailing design punctuation
+                    if extracted_value and isinstance(extracted_value, str):
+                        extracted_value = extracted_value.strip().lstrip(':-•').strip()
+                        
+                    product_info[field] = extracted_value
+                else:
+                    product_info[field] = None
+                    
+            except Exception as e:
+                product_info[field] = None
+                print(f"⚠️ Warning: Failed extracting field '{field}': {e}")
+                
         return product_info
     
     async def _rate_limit_wait(self):
