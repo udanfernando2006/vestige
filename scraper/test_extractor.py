@@ -1,6 +1,8 @@
 import asyncio
+import json
 from pipeline.llm_extractor import Extractor
 from playwright.async_api import async_playwright
+from cloud_config import cloud_config
 
 async def get_html(url):
     """Fetches the raw HTML content of the page using Playwright."""
@@ -31,17 +33,7 @@ async def get_html(url):
         print(f"Playwright execution failed: {e}")
         return None
 
-async def test_extraction():
-    test_urls = [
-        "https://jumpbooks.lk/product/the-last-wish-reissue-introducing-the-witcher-now-a-major-netflix-show/",
-        "https://sarasavi.lk/product/the-witcher---the-last-wish-147323106x",
-        "https://jeyabookcentre.com/item/75242-the-last-wish?srsltid=AfmBOoq0kjNyIWejlHCi2lFKboz48AyTO-7XHfzT01s_FneKvcGsQHz5",
-        "https://www.expo-graphic.com/books/The-Witcher---Ehe-Last-Wish-9781399611398/view",
-        "https://mdgunasena.com/product/the-last-wish/"
-    ]
-    
-    target_book_title = "The Last Wish"
-    
+async def test_local_extraction(target_book_title, test_urls):   
     for url in test_urls:
         print(f"\n{'='*80}")
         print(f"Testing URL: {url}")
@@ -84,5 +76,39 @@ async def test_extraction():
             else:
                 print(f"  📝 Description: None")
 
+async def test_cloud_extraction(target_book_title, test_urls, cloud_config):
+
+    extractor = Extractor(cloud_config)
+    
+    for url in test_urls:
+        print("\n" + "="*80)
+        print(f"☁️ Cloud Testing Selectors for: {url}")
+        print("="*80)
+        
+        raw_html = await get_html(url)
+        if not raw_html:
+            print("❌ HTML Payload retrieval failed.")
+            continue
+            
+        print("🧹 Cleaning HTML (Cloud mode: Retaining attributes)...")
+        cleaned_html = extractor.clean_html(raw_html)
+        
+        print(f"🧠 Prompting OpenRouter Cloud Model ({cloud_config['model_name']})...")
+        selectors_config = extractor.extract_selectors(cleaned_html, target_book_title)
+        
+        print("\n✅ Generated Selectors Mapping:")
+        print(json.dumps(selectors_config, indent=2))
+
+
+test_urls = [
+        # "https://sarasavi.lk/product/the-witcher---the-last-wish-147323106x",
+        "https://jumpbooks.lk/product/the-last-wish-reissue-introducing-the-witcher-now-a-major-netflix-show/",
+        # "https://jeyabookcentre.com/item/75242-the-last-wish?srsltid=AfmBOoq0kjNyIWejlHCi2lFKboz48AyTO-7XHfzT01s_FneKvcGsQHz5",
+        # "https://www.expo-graphic.com/books/The-Witcher---Ehe-Last-Wish-9781399611398/view",
+        # "https://mdgunasena.com/product/the-last-wish/"
+    ]
+    
+target_book_title = "The Last Wish"
+
 if __name__ == "__main__":
-    asyncio.run(test_extraction())
+    asyncio.run(test_cloud_extraction(target_book_title, test_urls, cloud_config))
