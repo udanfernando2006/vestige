@@ -5,79 +5,121 @@ import html2text
 from datetime import datetime, timezone
 
 from models.result import AvailabilityResult
+from browser.session import BrowserSession
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 
 class Scraper:
-    def __init__(self, headless: bool = True, wait_time: int = 5):
+    def __init__(self, headless: bool = True, wait_time: int = 5, timeout: int = 60000):
         self._headless = headless
         self._wait_time = wait_time
+        self._timeout = timeout
 
-    async def scrape(self, url, selectors, wait_selectors=None) -> dict:
-        try:
-            async with async_playwright() as self.p:
-                await self._setup_browser()
-                await self._rate_limit_wait()
-                await self._navigate_page(url, wait_selectors)
-                html = await self.page.content()
-                soup = BeautifulSoup(html, 'lxml')
-                extracted = await self._extract_data(soup, selectors)
-                print(json.dumps(extracted, indent=2))
-                await self.browser.close()
+    async def scrape(self, url: str, selectors: dict, wait_selectors = None, session: BrowserSession = None) -> dict:
+        if session:
+            return await self._do_scrape(session, url, selectors, wait_selectors)
+        else:
+            async with BrowserSession({'headless': self._headless, 'timeout': self._timeout}) as session:
+                return await self._do_scrape(session, url, selectors, wait_selectors)
 
-                result = AvailabilityResult(
-                    raw_price_text=extracted.get('price'),
-                    raw_stock_text=extracted.get('availability'),
-                    scraped_at=datetime.now(timezone.utc),
-                )
-
-                if extracted.get('price'):
-                    result.price = self.parse_price(extracted['price'])
-
-                if extracted.get('availability'):
-                    result.in_stock = self.parse_stock_status(extracted['availability'])
-
-                if result.in_stock is True:
-                    result.status = "IN_STOCK"
-                elif result.in_stock is False:
-                    result.status = "OUT_OF_STOCK"
-
-                return result
-        
-        except Exception as e:
-            return AvailabilityResult(
-                status="ERROR",
-                reason=str(e),
-                scraped_at=datetime.now(timezone.utc)
-            )
-
-    async def _setup_browser(self):
-        self.browser = await self.p.chromium.launch(headless=self._headless,
-            args=['--disable-blink-features=AutomationControlled'])
-        self.page = await self.browser.new_page()
-        
-        await self.page.set_extra_http_headers({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
-            'Referer': 'https://www.google.com/',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        })
-        await self.page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
-
-
-    async def _navigate_page(self, url, wait_selectors=None):
-        # Navigate to the page
-        await self.page.goto(url, timeout=60000)
-        
-        await self.page.wait_for_load_state('networkidle')
+    async def _do_scrape(self, session: BrowserSession, url: str, selectors: dict, wait_selectors=None) -> dict:
+        await self._rate_limit_wait()
+        await session.navigate(url)
         
         # Wait for critical selectors if specified
         if wait_selectors:
             for selector in wait_selectors:
-                try:
-                    await self.page.wait_for_selector(selector, timeout=5000)
-                except:
-                    pass  # Selector may not exist on this page
+                await session.wait_for_selector(selector)
+        
+        html = await session.get_html()
+        soup = BeautifulSoup(html, 'lxml')
+        extracted = await self._extract_data(soup, selectors)
+        print(json.dumps(extracted, indent=2))
+        result = AvailabilityResult(
+            raw_price_text=extracted.get('price'),
+            raw_stock_text=extracted.get('availability'),
+            scraped_at=datetime.now(timezone.utc),
+        )
+
+        if extracted.get('price'):
+            result.price = self.parse_price(extracted['price'])
+
+        if extracted.get('availability'):
+            result.in_stock = self.parse_stock_status(extracted['availability'])
+
+        if result.in_stock is True:
+            result.status = "IN_STOCK"
+        elif result.in_stock is False:
+            result.status = "OUT_OF_STOCK"
+
+        return result
+
+
+    # async def scrape(self, url, selectors, wait_selectors=None) -> dict:
+    #     try:
+    #         async with async_playwright() as self.p:
+    #             await self._setup_browser()
+    #             await self._rate_limit_wait()
+    #             await self._navigate_page(url, wait_selectors)
+    #             html = await self.page.content()
+    #             soup = BeautifulSoup(html, 'lxml')
+    #             extracted = await self._extract_data(soup, selectors)
+    #             print(json.dumps(extracted, indent=2))
+    #             await self.browser.close()
+
+    #             result = AvailabilityResult(
+    #                 raw_price_text=extracted.get('price'),
+    #                 raw_stock_text=extracted.get('availability'),
+    #                 scraped_at=datetime.now(timezone.utc),
+    #             )
+
+    #             if extracted.get('price'):
+    #                 result.price = self.parse_price(extracted['price'])
+
+    #             if extracted.get('availability'):
+    #                 result.in_stock = self.parse_stock_status(extracted['availability'])
+
+    #             if result.in_stock is True:
+    #                 result.status = "IN_STOCK"
+    #             elif result.in_stock is False:
+    #                 result.status = "OUT_OF_STOCK"
+
+    #             return result
+        
+    #     except Exception as e:
+    #         return AvailabilityResult(
+    #             status="ERROR",
+    #             reason=str(e),
+    #             scraped_at=datetime.now(timezone.utc)
+    #         )
+
+    # async def _setup_browser(self):
+    #     self.browser = await self.p.chromium.launch(headless=self._headless,
+    #         args=['--disable-blink-features=AutomationControlled'])
+    #     self.page = await self.browser.new_page()
+        
+    #     await self.page.set_extra_http_headers({
+    #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
+    #         'Referer': 'https://www.google.com/',
+    #         'Accept-Language': 'en-US,en;q=0.9',
+    #         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    #     })
+    #     await self.page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => false})")
+
+
+    # async def _navigate_page(self, url, wait_selectors=None):
+    #     # Navigate to the page
+    #     await self.page.goto(url, timeout=60000)
+        
+    #     await self.page.wait_for_load_state('networkidle')
+        
+    #     # Wait for critical selectors if specified
+    #     if wait_selectors:
+    #         for selector in wait_selectors:
+    #             try:
+    #                 await self.page.wait_for_selector(selector, timeout=5000)
+    #             except:
+    #                 pass  # Selector may not exist on this page
 
     async def _extract_data(self, soup: BeautifulSoup, selectors: dict) -> dict:
         product_info = {}

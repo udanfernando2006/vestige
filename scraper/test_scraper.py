@@ -4,6 +4,7 @@ import json
 from dataclasses import asdict
 
 async def scrape_with_limit(semaphore, pair):
+    print("URL:", pair['url'])
     async with semaphore:
         scraper = Scraper(headless=True, wait_time=2)  # New instance per request
         return await scraper.scrape(pair['url'], pair['selectors'], pair.get('wait_selectors'))
