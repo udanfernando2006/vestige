@@ -107,93 +107,6 @@ class Extractor:
 
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
-    # def clean_html(self, html: str) -> str:
-    #     soup = BeautifulSoup(html, 'lxml')
-        
-    #     # Decompose baseline technical components
-    #     tags_to_remove = ['script', 'style', 'nav', 'footer', 'header', 'svg', 'iframe', 'noscript', 'dialog', 'form']
-    #     for tag in tags_to_remove:
-    #         for element in soup.find_all(tag):
-    #             element.decompose()
-        
-    #     # Target global utility layouts precisely
-    #     global_structural_elements = [
-    #         'div#header', 'div#footer', '.site-header', '.site-footer', 
-    #         '.top-bar', '.main-navigation', '.footer-widgets', '#sidebar-menu',
-    #         '.top-banner-fixed', '.bg-gray-900', '.cookie-notice', '#cookie-law-info-bar'
-    #     ]
-    #     for sel in global_structural_elements:
-    #         for element in soup.select(sel):
-    #             element.decompose()
-
-    #     # Remove recommendation blocks to avoid card contamination
-    #     cross_sell_identifiers = [
-    #         '.related', '.upsells', '.cross-sells', '#related-products', 
-    #         '.product-carousel', '.related-products', '.recommended-products',
-    #         '.up-sells', '.product_carousel'
-    #     ]
-    #     for identifier in cross_sell_identifiers:
-    #         for element in soup.select(identifier):
-    #             element.decompose()
-
-    #     comments = soup.find_all(string=lambda text: isinstance(text, Comment))
-    #     for comment in comments:
-    #         comment.decompose()
-
-    #     core_element = None
-    #     if soup.find('main'):
-    #         core_element = soup.find('main')
-    #     elif soup.find(id=re.compile(r'^(main|content|primary|app-root)$', re.IGNORECASE)):
-    #         core_element = soup.find(id=re.compile(r'^(main|content|primary|app-root)$', re.IGNORECASE))
-    #     elif soup.find(class_=re.compile(r'(main-content|page-content|product-detail)', re.IGNORECASE)):
-    #         core_element = soup.find(class_=re.compile(r'(main-content|page-content|product-detail)', re.IGNORECASE))
-        
-    #     if core_element:
-    #         soup = core_element
-
-    #     void_elements = {'img', 'input', 'hr', 'br', 'meta', 'link'}
-        
-    #     # Loop bottom-up multiple times to clear progressively emptied parent containers
-    #     while True:
-    #         mutated = False
-    #         # Find all elements inside our targeted tree
-    #         for tag in soup.find_all(True):
-    #             # Skip globally protected structural elements
-    #             if tag.name in void_elements:
-    #                 continue
-                    
-    #             # Check if the tag has absolutely no text or functional child data left
-    #             raw_text = tag.get_text(strip=True)
-    #             has_protected_child = any(child.name in void_elements for child in tag.find_all(True))
-                
-    #             if not raw_text and not has_protected_child:
-    #                 tag.decompose()
-    #                 mutated = True
-    #                 break  # Break out to refresh soup tracking context
-                    
-    #         if not mutated:
-    #             break
-            
-    #     if self.engine == "local":
-    #         # STRIP ATTRIBUTES: Local models need raw semantic layout to save VRAM 
-    #         # and avoid keyword distraction.
-    #         for tag in soup.find_all(True):
-    #             tag.attrs = {}
-            
-    #         print(len(str(soup)))
-    #         # print(str(soup.prettify())[:6000])
-
-    #         return soup.get_text(separator=" ", strip=True)
-    #     else:
-    #         # KEEP ATTRIBUTES: Cloud models need `class` and `id` tags 
-    #         # so they can generate accurate CSS selectors.
-    #         allowed_attrs = ['class', 'id']
-    #         for tag in soup.find_all(True):
-    #             tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
-    #     print(len(str(soup)))
-    #     print(str(soup)[:6000])
-    #     return str(soup)
-
     def clean_html(self, html: str) -> str:
         soup = BeautifulSoup(html, 'lxml')
         
@@ -233,16 +146,12 @@ class Extractor:
             
             # Return straight string representation to retain the native indentation lines
             # that small models use as positional anchors
-            print(len(str(soup)))
-            print(soup.prettify()[:6000])
             return str(soup)
             
         else:
             allowed_attrs = ['class', 'id']
             for tag in soup.find_all(True):
                 tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
-
-        print(len(str(soup)))
         return str(soup)
 
     def extract_details(self, cleaned_html: str, target_title: str) -> dict:

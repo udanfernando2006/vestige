@@ -72,7 +72,7 @@ async def test_local_extraction(target_book_title, test_urls):
             
             desc = result.get('description')
             if desc:
-                print(f"  📝 Description: {desc}")
+                print(f"  📝 Description: {desc[:20]}")
             else:
                 print(f"  📝 Description: None")
 
@@ -112,3 +112,4 @@ target_book_title = "The Last Wish"
 
 if __name__ == "__main__":
     asyncio.run(test_cloud_extraction(target_book_title, test_urls, cloud_config))
+    # asyncio.run(test_local_extraction(target_book_title, test_urls))
