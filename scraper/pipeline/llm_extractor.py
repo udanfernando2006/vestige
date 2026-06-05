@@ -22,6 +22,7 @@ Rules:
    - Example sequence: If you see "<li><strong>ISBN-13:</strong> 978...</li>", the sequence of numbers after the tag is the value. Capture it explicitly.
    - If you see scientific notation (like 9.78147E+12), convert it back into full text digits. If completely absent, return null.
 
+ONLY RETURN THE FIELDS IN THIS LIST, DON'T INCLUDE ANY OF THE OTHERS: {fields}
 Expected JSON Schema:
 {{
   "price": "string or null",
@@ -154,10 +155,13 @@ class Extractor:
                 tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
         return str(soup)
 
-    def extract_details(self, cleaned_html: str, target_title: str) -> dict:
+    def extract_details(self, cleaned_html: str, target_title: str, fields: list = None) -> dict:
+        if not fields:
+            fields = ["price", "stock_status", "description", "isbn"]
         user_content = SEMANTIC_USER_PROMPT.format(
             target_title=target_title,
-            cleaned_html=cleaned_html
+            cleaned_html=cleaned_html,
+            fields=fields
         )
 
         return self._call_llm(user_content, SEMANTIC_SYSTEM_PROMPT)

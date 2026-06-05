@@ -59,22 +59,24 @@ async def test_local_extraction(target_book_title, test_urls):
         
         # 4. Prompt Local LLM
         print("🧠 Sending prompt to Local LLM (Qwen 3B)...")
-        result = extractor.extract_details(cleaned_html, target_book_title)
+        result = extractor.extract_details(cleaned_html, target_book_title, ['price', 'stock_status'])
         
         # 5. Print Results
         if "error" in result and result["error"]:
             print(f"❌ Extraction Error: {result['error']}")
         else:
-            print(f"✅ Extraction Successful!")
-            print(f"  💰 Price:       {result.get('price')}")
-            print(f"  📦 Stock:       {result.get('stock_status')}")
-            print(f"  🆔 ISBN:        {result.get('isbn')}")
+            # print(f"✅ Extraction Successful!")
+            # print(f"  💰 Price:       {result.get('price')}")
+            # print(f"  📦 Stock:       {result.get('stock_status')}")
+            # print(f"  🆔 ISBN:        {result.get('isbn')}")
             
-            desc = result.get('description')
-            if desc:
-                print(f"  📝 Description: {desc[:20]}")
-            else:
-                print(f"  📝 Description: None")
+            # desc = result.get('description')
+            # if desc:
+            #     print(f"  📝 Description: {desc[:20]}")
+            # else:
+            #     print(f"  📝 Description: None")
+            for key, value in result.items():
+                print(f"  {key.capitalize()}: {value}")
 
 async def test_cloud_extraction(target_book_title, test_urls, cloud_config):
 
@@ -111,5 +113,5 @@ test_urls = [
 target_book_title = "The Last Wish"
 
 if __name__ == "__main__":
-    asyncio.run(test_cloud_extraction(target_book_title, test_urls, cloud_config))
-    # asyncio.run(test_local_extraction(target_book_title, test_urls))
+    # asyncio.run(test_cloud_extraction(target_book_title, test_urls, cloud_config))
+    asyncio.run(test_local_extraction(target_book_title, test_urls))
