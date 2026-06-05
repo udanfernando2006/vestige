@@ -1,3 +1,4 @@
+# TODO: Implement with/after DBWriter implementation
 
 from browser.session import BrowserSession
 from pipeline.scraper import Scraper

@@ -11,7 +11,7 @@ def main():
 def build_extractor_config():
     pass
 
-def load_target(pair, id, url, store):
+def load_target(pair, id, url, store): # TODO: replace with DBWriter call
     pass
 
 def fetch_and_trim_html(url, extractor, session=None):
@@ -20,5 +20,5 @@ def fetch_and_trim_html(url, extractor, session=None):
 def validate_selectors(url, price_sel, stock_sel, extractor):
     pass
 
-def commit_to_db(pair_id, price_sel, stock_sel):
+def commit_to_db(pair_id, price_sel, stock_sel): # TODO: replace with DBWriter call
     pass

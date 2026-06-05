@@ -209,7 +209,3 @@ class Crawler:
         # Sort by match score (descending)
         scored.sort(key=lambda x: x['match_score'], reverse=True)
         return scored
-    
-
-    def mark_not_listed(self, pair_id):
-        pass
