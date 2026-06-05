@@ -17,7 +17,7 @@ async def test_discover_search_endpoints():
         print(f"Testing: {base_url}")
         print('='*60)
         
-        result = await crawler.find_product_url(base_url, title)
+        result = await crawler.find_product_url({'base_url': base_url}, title)
         
         print(f"Success: {result.get('success')}")
         print(f"Product URL: {result.get('product_url')}")

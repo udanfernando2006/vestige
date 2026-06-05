@@ -78,3 +78,26 @@ class BrowserSession:
             print(f"Error during search submission: {e}")
 
         return True
+    
+    async def fresh_context(self) -> 'BrowserSession':
+        """
+        Returns a new BrowserSession sharing the same browser process
+        but with a completely fresh context — new cookies, storage, fingerprint.
+        Caller is responsible for closing via async with.
+        """
+        new_session = BrowserSession.__new__(BrowserSession)
+        new_session._browser_config = self._browser_config
+        new_session._headless = self._headless
+        new_session._timeout = self._timeout
+        new_session._playwright = self._playwright   # shared
+        new_session._browser = self._browser         # shared
+        context = await self._browser.new_context()
+        new_session._page = await context.new_page()
+        await new_session._page.set_extra_http_headers(
+            self._browser_config.get('headers', self._DEFAULT_HEADERS)
+        )
+        await new_session._page.add_init_script(
+            self._browser_config.get('init_script', 
+            "Object.defineProperty(navigator, 'webdriver', {get: () => false})")
+        )
+        return new_session
