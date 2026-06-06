@@ -1,3 +1,11 @@
+/venv
 /docs
+/learning-phase
 
 /DECISIONS.md
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+/scraper/cloud_config.py
