@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot
+from models.result import AvailabilityResult
 
 
 class DBWriter:
@@ -322,14 +323,13 @@ class DBWriter:
     # SNAPSHOT WRITES
     # =========================================================================
 
-    def write_snapshot(self, pair_id: int, result_obj, source: str) -> Dict[str, Any]:
+    def write_snapshot(self, pair_id: int, result_obj: AvailabilityResult) -> Dict[str, Any]:
         """
         Writes an immutable snapshot and updates the tracking pair's current status.
         
         Args:
             pair_id: ID of the tracking pair
             result_obj: AvailabilityResult with in_stock, price, status fields
-            source: "scraper" or "llm_direct"
         """
         with self.Session() as session:
             # 1. Append to history
@@ -338,7 +338,7 @@ class DBWriter:
                 in_stock=result_obj.in_stock,
                 price=result_obj.price,
                 status=result_obj.status,
-                source=source,
+                source=result_obj.source,
                 scraped_at=datetime.now(timezone.utc)
             )
             session.add(snapshot)
