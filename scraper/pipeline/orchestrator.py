@@ -12,6 +12,80 @@ from db.models import TrackingPair, AvailabilitySnapshot
 from db.writer import DBWriter
 from sqlalchemy import desc
 
+
+async def run_all(db_writer: DBWriter) -> dict:
+    """
+    Top-level orchestration loop. Called by main.py on each scheduled run.
+    Loads all active pairs, routes each through the correct path, writes
+    snapshots, detects changes, and returns the run summary.
+    """
+    run_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+
+    pairs = load_active_pairs(db_writer)
+    print(f"[{run_id}] Starting run — {len(pairs)} active pairs")
+
+    all_results = []
+    changes = []
+    errors = []
+
+    for pair in pairs:
+        path = determine_path(pair)
+        result = await run_pair(pair, path, db_writer)
+
+        pair_summary = {
+            "pair_id": pair['id'],
+            "book": pair['book_name'],
+            "store": pair['store_name'],
+            "status": result.get('status'),
+            "changed": False,
+        }
+
+        if result.get('status') == 'COMPLETED':
+            # Capture previous state BEFORE writing new snapshot
+            last = db_writer.get_last_snapshot(pair['id'])
+
+            availability = result['result']
+            availability.source = "llm_direct" if path == 'D' else "scraper"
+
+            db_writer.write_snapshot(pair['id'], availability)
+            db_writer.update_pair_status(pair['id'], availability.status)
+
+            pair_summary['price'] = availability.price
+            pair_summary['status'] = availability.status 
+
+            # Detect changes
+            prev_status = last['status'] if last else None
+            if last is None or last['in_stock'] != availability.in_stock:
+                pair_summary['changed'] = True
+                changes.append({
+                    "pair_id": pair['id'],
+                    "from": prev_status,
+                    "to": availability.status
+                })
+
+        elif result.get('status') == 'NEEDS_SETUP':
+            pass  # DBWriter already updated status; just record it
+
+        else:
+            errors.append({"pair_id": pair['id'], "reason": result.get('reason')})
+
+        all_results.append(pair_summary)
+
+    duration = (datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds()
+    summary = collect_run_summary(all_results)
+    summary.update({
+        "run_id": run_id,
+        "results": all_results,
+        "changes": changes,
+        "errors": errors,
+        "duration_seconds": round(duration, 1)
+    })
+
+    print(f"[{run_id}] Done — {summary['completed']} completed, "
+          f"{len(changes)} changes, {len(errors)} errors in {duration:.1f}s")
+    return summary
+
 def is_llm_discovery_enabled() -> bool:
     """Reads LLM_DISCOVERY_ENABLED from env; returns bool."""
     return os.environ.get("LLM_DISCOVERY_ENABLED", "false").lower() == "true"
@@ -39,23 +113,6 @@ def determine_path(pair: TrackingPair) -> str:
 def load_active_pairs(db_writer: DBWriter) -> List[Dict]:
     """Fetches all tracking pairs where status is not SKIP or NEEDS_SETUP."""
     return db_writer.get_active_pairs()
-
-def compare_with_last_state(pair_id: int, new_result: AvailabilityResult, db_writer: DBWriter) -> bool:
-    """Checks the latest snapshot to detect if availability or price has changed."""
-    with db_writer.Session() as session:
-        last_snapshot = session.query(AvailabilitySnapshot).filter_by(
-            pair_id=pair_id
-        ).order_by(desc(AvailabilitySnapshot.scraped_at)).first()
-        
-        if not last_snapshot:
-            return True  # First time scraping this pair
-            
-        if last_snapshot.in_stock != new_result.in_stock:
-            return True
-        if last_snapshot.price != new_result.price:
-            return True
-            
-        return False
 
 def handle_error(pair: TrackingPair, error: Union[str, Exception], db_writer: DBWriter) -> AvailabilityResult:
     """
