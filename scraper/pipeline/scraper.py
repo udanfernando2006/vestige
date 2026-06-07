@@ -13,14 +13,14 @@ class Scraper:
         self._wait_time = wait_time
         self._timeout = timeout
 
-    async def scrape(self, url: str, selectors: dict, wait_selectors = None, session: BrowserSession = None) -> dict:
+    async def scrape(self, url: str, selectors: dict, wait_selectors = None, session: BrowserSession = None) -> AvailabilityResult:
         if session:
             return await self._do_scrape(session, url, selectors, wait_selectors)
         else:
             async with BrowserSession({'headless': self._headless, 'timeout': self._timeout}) as session:
                 return await self._do_scrape(session, url, selectors, wait_selectors)
 
-    async def _do_scrape(self, session: BrowserSession, url: str, selectors: dict, wait_selectors=None) -> dict:
+    async def _do_scrape(self, session: BrowserSession, url: str, selectors: dict, wait_selectors=None) -> AvailabilityResult:
         await self._rate_limit_wait()
         await session.navigate(url)
         
