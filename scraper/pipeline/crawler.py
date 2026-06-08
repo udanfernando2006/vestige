@@ -29,7 +29,10 @@ class Crawler:
         scored = self._score_candidates(candidates, isbn, title, urls['base_url'])
         if not scored:
             return {"success": False, "product_url": None, "status": "NOT_LISTED"}
-        return await self._validate_candidates(session, scored, title, isbn)
+        result = await self._validate_candidates(session, scored, title, isbn)
+        if result['success']:
+            result['search_url_template'] = urls['search_endpoint_url']
+        return result
 
     async def _run_discovery(self, base_url: str, title: str, isbn: str):
 
@@ -58,7 +61,10 @@ class Crawler:
             if not scored:
                 return {"success": False, "product_url": None, "status": "NOT_LISTED"}
             else:
-                return await self._validate_candidates(search_session, scored, title, isbn)
+                result = await self._validate_candidates(search_session, scored, title, isbn)
+                if result['success']:
+                    result['search_url_template'] = search_endpoint_url
+                return result
     
     def _validate_from_html(self, html: str, url: str, title: str, isbn: str = None) -> dict:
         soup = BeautifulSoup(html, 'lxml')
