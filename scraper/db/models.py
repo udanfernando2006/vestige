@@ -74,9 +74,11 @@ class AvailabilitySnapshot(Base):
     status: Mapped[str]
     source: Mapped[Optional[str]]
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-    __table_args__ = (
-        Index('idx_pair_scraped_desc', 'pair_id', 'scraped_at'),
-    )
-
+    
     tracking_pair: Mapped["TrackingPair"] = relationship(back_populates="snapshots")
+
+Index(
+    'idx_pair_scraped_desc',
+    AvailabilitySnapshot.pair_id,
+    AvailabilitySnapshot.scraped_at.desc()
+)
