@@ -33,9 +33,9 @@ from dotenv import load_dotenv
 # whether the script is run from scraper/ or the project root.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from scraper.browser.session import BrowserSession
-from scraper.db.writer import DBWriter
-from scraper.pipeline.llm_extractor import Extractor
+from browser.session import BrowserSession
+from db.writer import DBWriter
+from pipeline.llm_extractor import Extractor
 
 load_dotenv()
 
@@ -200,6 +200,8 @@ async def _run(args) -> int:
     Returns exit code: 0 = success, 1 = failure.
     The Orchestrator checks this exit code when running as a subprocess.
     """
+
+    print("Resolving target URL...")
     target = load_target(args.pair_id, args.url, args.store)
 
     print(f"Fetching HTML: {target['url']}")

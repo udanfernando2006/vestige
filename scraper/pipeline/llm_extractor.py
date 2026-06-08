@@ -207,7 +207,7 @@ class Extractor:
                 return {"error": "OpenRouter returned an empty choices selection array."}
             
             resolved_model = getattr(response, 'model', 'Unknown Fallback Model')
-            print(f"📡 {self.provider.upper()} Router Resolved to: {resolved_model}")
+            print(f"[LLM]{self.provider.upper()} resolved to: {resolved_model}")
                 
             raw_content = response.choices[0].message.content
             if not raw_content:

@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import datetime
 
@@ -203,15 +204,20 @@ async def run_pair_path_b(pair: TrackingPair, session: BrowserSession, db_writer
         return {"pair_id": pair['id'], "status": "NEEDS_SETUP"}
 
     print(f"Path B: Running discover_selectors.py for Pair {pair['id']}")
+    capture_output = False # Keep as False to see console log from discover_selectors.py in real-time which is more useful compared to the error log
     proc = subprocess.run(
-        ["python", "scraper/tools/discover_selectors.py",
+        [sys.executable, "tools/discover_selectors.py",
          "--pair-id", str(pair['id']), "--commit"],
-        capture_output=True,
-        text=True
+        capture_output=capture_output,
+        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"}
     )
 
     if proc.returncode != 0:
-        print(f"Path B: Discovery failed.\n{proc.stderr}")
+        print("Path B: Discovery failed.")
+        if capture_output:
+            print(proc.stderr)
         db_writer.update_pair_status(pair['id'], 'NEEDS_SETUP')
         return {"pair_id": pair['id'], "status": "NEEDS_SETUP"}
 
