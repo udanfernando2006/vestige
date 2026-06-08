@@ -25,10 +25,8 @@ import re
 import sys
 from dataclasses import dataclass
 from typing import Optional
-from xml.parsers.expat import model
 
-import requests
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 # Ensure project root is on the path so db/browser imports resolve

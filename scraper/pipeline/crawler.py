@@ -12,7 +12,7 @@ class Crawler:
 
 
     async def find_product_url(self, urls: dict, title: str, isbn: str = None, session = None):
-        if session and urls.get('search_endpoint_url'):
+        if session and urls.get('search_url_template'):
             return await self._run_with_session(session, urls, title, isbn)
         else:
             return await self._run_discovery(urls['base_url'], title, isbn)
@@ -21,7 +21,7 @@ class Crawler:
         # search_url_template comes from the store record — built here once DB exists
         # e.g. "https://jumpbooks.lk/?s={query}" → replace {query} with isbn or title
         query = isbn if isbn else title
-        search_url = self._build_search_url(urls['search_endpoint_url'], query)
+        search_url = self._build_search_url(urls['search_url_template'], query)
 
         await session.navigate(search_url)
         html = await session.get_html()
@@ -31,7 +31,7 @@ class Crawler:
             return {"success": False, "product_url": None, "status": "NOT_LISTED"}
         result = await self._validate_candidates(session, scored, title, isbn)
         if result['success']:
-            result['search_url_template'] = urls['search_endpoint_url']
+            result['search_url_template'] = urls['search_url_template']
         return result
 
     async def _run_discovery(self, base_url: str, title: str, isbn: str):
@@ -45,12 +45,12 @@ class Crawler:
             if not filled:
                 return {"success": False, "error": "No search form found"}
             
-            search_endpoint_url = await discovery_session.get_url()
+            search_url_template = await discovery_session.get_url()
 
         # Step 2: build the real search URL and fetch results
         async with BrowserSession(config) as search_session:
             query = isbn if isbn else title
-            actual_search_url = self._build_search_url(search_endpoint_url, query)
+            actual_search_url = self._build_search_url(search_url_template, query)
             print("Navigating to search URL:", actual_search_url)
             await search_session.navigate(actual_search_url)
             html = await search_session.get_html()
@@ -63,7 +63,7 @@ class Crawler:
             else:
                 result = await self._validate_candidates(search_session, scored, title, isbn)
                 if result['success']:
-                    result['search_url_template'] = search_endpoint_url
+                    result['search_url_template'] = search_url_template
                 return result
     
     def _validate_from_html(self, html: str, url: str, title: str, isbn: str = None) -> dict:
