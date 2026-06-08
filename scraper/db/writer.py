@@ -9,8 +9,8 @@ from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from scraper.db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot
-from scraper.models.result import AvailabilityResult
+from db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot
+from models.result import AvailabilityResult
 
 
 class DBWriter:

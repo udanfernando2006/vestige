@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 
 # Ensure project root is on the path so db/browser imports resolve
 # whether the script is run from scraper/ or the project root.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from scraper.browser.session import BrowserSession
 from scraper.db.writer import DBWriter
