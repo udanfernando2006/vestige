@@ -105,6 +105,7 @@ class Extractor:
         self.api_base = config.get("api_base", "http://localhost:11434/v1")
         self.api_key = config.get("api_key", "ollama")
         self.model_name = config.get("model_name", "qwen2.5-coder:3b")
+        self.provider = config.get("provider", "ollama")
 
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
@@ -206,7 +207,7 @@ class Extractor:
                 return {"error": "OpenRouter returned an empty choices selection array."}
             
             resolved_model = getattr(response, 'model', 'Unknown Fallback Model')
-            print(f"📡 OpenRouter Router Resolved to: {resolved_model}")
+            print(f"📡 {self.provider.upper()} Router Resolved to: {resolved_model}")
                 
             raw_content = response.choices[0].message.content
             if not raw_content:

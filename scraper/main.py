@@ -17,7 +17,7 @@ async def main():
     Base.metadata.create_all(engine)  # safe to call on every run
     db = DBWriter(engine)
 
-    with open("books_config.json") as f:
+    with open("D:\\Projects\\Vestige\\vestige\\books_config.json") as f:
         db.sync_config(json.load(f))
 
     summary = await run_all(db)

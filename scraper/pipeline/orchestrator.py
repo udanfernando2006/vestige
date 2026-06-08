@@ -253,7 +253,7 @@ async def run_pair_path_d(pair: TrackingPair, session: BrowserSession) -> dict:
     await session.navigate(pair['product_url'])
     html = await session.get_html()
     
-    extractor = Extractor({"model_name": os.environ.get("LLM_MODEL", "openrouter/free")})
+    extractor = Extractor({"model_name": os.environ.get("LLM_MODEL", "openrouter/free"), "provider": os.environ.get("LLM_PROVIDER", "openrouter")})
     cleaned_html = extractor.clean_html(html)
     
     details = extractor.extract_details(
