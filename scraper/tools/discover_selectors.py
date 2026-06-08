@@ -25,6 +25,7 @@ import re
 import sys
 from dataclasses import dataclass
 from typing import Optional
+from xml.parsers.expat import model
 
 import requests
 from bs4 import BeautifulSoup, Comment
@@ -36,6 +37,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from browser.session import BrowserSession
 from db.writer import DBWriter
+from pipeline.llm_extractor import Extractor
 
 load_dotenv()
 
@@ -86,6 +88,7 @@ def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]
         return {
             "url": pair["product_url"],
             "store_name": pair["store_name"],
+            "book_name": pair["book_name"],
             "pair_id": pair_id,
         }
 
@@ -93,7 +96,7 @@ def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]
         if not store:
             print("Error: --store is required when using --url", file=sys.stderr)
             sys.exit(1)
-        return {"url": url, "store_name": store, "pair_id": None}
+        return {"url": url, "store_name": store, "book_name": None, "pair_id": None}
 
     else:
         print("Error: Provide either --pair-id or --url", file=sys.stderr)
@@ -101,170 +104,14 @@ def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — Fetch and trim the product page HTML
+# Step 2 — Fetch the product page HTML
 # ---------------------------------------------------------------------------
 
-async def fetch_and_trim_html(url: str) -> str:
-    """
-    Fetches the page via Playwright, removes boilerplate nodes (scripts, styles,
-    nav, footer, header, SVG, HTML comments), then extracts only the product
-    container subtree. Sending the full page to the LLM wastes tokens and causes
-    small models to drift toward promotional elements instead of the main price.
-    """
+async def fetch_html(url: str) -> str:
+    """Fetches the raw page HTML via Playwright. Cleaning is handled by extractor.clean_html()."""
     async with BrowserSession() as session:
         await session.navigate(url)
-        html = await session.get_html()
-
-    soup = BeautifulSoup(html, "lxml")
-
-    # Remove boilerplate tags entirely
-    for tag in soup.find_all(["script", "style", "nav", "footer", "header", "svg"]):
-        tag.decompose()
-    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        comment.extract()
-
-    # Find the most specific product container available
-    container = (
-        soup.find("main")
-        or soup.find(id="product")
-        or soup.find(class_="product-detail")
-        or soup.find(class_="product-container")
-        or soup.find(class_="product-page")
-        or soup.body
-    )
-
-    return str(container)
-
-
-# ---------------------------------------------------------------------------
-# Step 3 — Build the LLM prompt
-# ---------------------------------------------------------------------------
-
-def build_prompt(trimmed_html: str) -> str:
-    """
-    Constructs the selector-discovery prompt. Key constraints baked in:
-    - Wildcard attribute selectors only (guards against Next.js hash class suffixes)
-    - Target the main retail price, not installment/discount widgets
-    - Return JSON only — no preamble, no markdown fences
-    """
-    return f"""You are analysing a product page HTML snippet from a Sri Lankan online bookstore.
-Your task: identify the CSS selectors for the main product PRICE and STOCK STATUS.
-
-STRICT RULES — follow exactly:
-1. Output ONLY valid JSON. No preamble, no explanation, no markdown code fences.
-2. Use wildcard attribute selectors: e.g. div[class*='price'] span
-   NEVER use exact class names — they may contain framework-generated hash suffixes.
-3. Select the MAIN retail price only.
-   Ignore: instalment amounts, card discount prices, "pay later" widgets, crossed-out prices.
-4. confidence must be a float between 0.0 and 1.0.
-5. price_sample and stock_sample must be the literal text you expect the selector to return.
-
-Required output format (JSON only):
-{{
-  "price_selector": "...",
-  "stock_selector": "...",
-  "price_sample": "...",
-  "stock_sample": "...",
-  "confidence": 0.0
-}}
-
-HTML:
-{trimmed_html[:12000]}
-"""
-
-
-# ---------------------------------------------------------------------------
-# Step 4 — Call the configured LLM provider
-# ---------------------------------------------------------------------------
-
-def call_llm(prompt: str) -> str:
-    """
-    Dispatches the prompt to the provider set in LLM_PROVIDER.
-    Returns the raw text response from the model.
-    Raises on HTTP errors or missing environment variables.
-    """
-    provider = os.environ.get("LLM_PROVIDER", "ollama").lower()
-    model = os.environ.get("LLM_MODEL", "qwen2.5-coder:3b")
-
-    if provider == "ollama":
-        base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        resp = requests.post(
-            f"{base_url}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return resp.json().get("response", "")
-
-    elif provider == "openrouter":
-        api_key = os.environ["OPENROUTER_API_KEY"]
-        resp = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "messages": [{"role": "user", "content": prompt}]},
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-
-    elif provider == "anthropic":
-        api_key = os.environ["ANTHROPIC_API_KEY"]
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "max_tokens": 512,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return resp.json()["content"][0]["text"]
-
-    else:
-        raise ValueError(f"Unknown LLM_PROVIDER: '{provider}'. Use ollama, openrouter, or anthropic.")
-
-
-# ---------------------------------------------------------------------------
-# Step 5 — Parse the LLM response
-# ---------------------------------------------------------------------------
-
-def parse_llm_response(raw: str) -> dict:
-    """
-    Extracts the JSON object from the LLM output.
-    - Strips markdown code fences if the model included them
-    - Falls back to regex extraction if there is surrounding text
-    - Raises ValueError with a clear message if no parseable JSON is found
-    """
-    # Remove markdown fences (```json ... ``` or ``` ... ```)
-    text = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
-
-    # Direct parse — the happy path
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Regex fallback — find the first {...} block
-    match = re.search(r"\{[^{}]+\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group())
-        except json.JSONDecodeError:
-            pass
-
-    raise ValueError(
-        f"Could not extract valid JSON from LLM output.\n"
-        f"First 500 chars of raw response:\n{raw[:500]}"
-    )
+        return await session.get_html()
 
 
 # ---------------------------------------------------------------------------
@@ -356,30 +203,36 @@ async def _run(args) -> int:
     The Orchestrator checks this exit code when running as a subprocess.
     """
     target = load_target(args.pair_id, args.url, args.store)
-    provider = os.environ.get("LLM_PROVIDER", "ollama")
-    model = os.environ.get("LLM_MODEL", "qwen2.5-coder:3b")
 
     print(f"Fetching HTML: {target['url']}")
-    trimmed_html = await fetch_and_trim_html(target["url"])
+    raw_html = await fetch_html(target["url"])
 
-    prompt = build_prompt(trimmed_html)
+    provider = os.environ.get("LLM_PROVIDER", "openrouter")
+    model = os.environ.get("LLM_MODEL", "openrouter/free")
+    engine = os.environ.get("LLM_ENGINE", "local")
+
+    if provider == "local":
+        print("Warning: Local models are not reliable for selector discovery. "
+          "Set LLM_ENGINE=cloud", file=sys.stderr)
+        return 1
+    
+    api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+
+    extractor = Extractor({"engine": engine, "api_base": api_base, "api_key": api_key, "model_name": model})
+
+    cleaned_html = extractor.clean_html(raw_html)
+
 
     print(f"Calling LLM ({provider} / {model})...")
-    try:
-        raw_response = call_llm(prompt)
-    except Exception as e:
-        print(f"Error calling LLM: {e}", file=sys.stderr)
+    selectors = extractor.extract_selectors(cleaned_html, target['book_name'])
+
+    if 'error' in selectors:
+        print(f"Error: {selectors['error']}", file=sys.stderr)
         return 1
 
-    try:
-        parsed = parse_llm_response(raw_response)
-    except ValueError as e:
-        print(f"Error parsing LLM response: {e}", file=sys.stderr)
-        return 1
-
-    price_sel = parsed.get("price_selector")
-    stock_sel = parsed.get("stock_selector")
-    confidence = parsed.get("confidence", 0.0)
+    price_sel = selectors.get('price', {}).get('selector') if selectors.get('price') else None
+    stock_sel = selectors.get('availability', {}).get('selector') if selectors.get('availability') else None
 
     # --commit: validate against the live page, then write to DB if both pass
     if args.commit:
@@ -394,7 +247,6 @@ async def _run(args) -> int:
             result = {
                 "price_selector": price_sel if validation.price_passed else None,
                 "stock_selector": stock_sel if validation.stock_passed else None,
-                "confidence": confidence,
                 "model_used": model,
                 "committed": False,
                 "reason": validation.reason,
@@ -408,7 +260,6 @@ async def _run(args) -> int:
             "stock_selector": stock_sel,
             "price_sample": validation.price_sample,
             "stock_sample": validation.stock_sample,
-            "confidence": confidence,
             "model_used": model,
             "committed": True,
         }
@@ -418,9 +269,6 @@ async def _run(args) -> int:
         result = {
             "price_selector": price_sel,
             "stock_selector": stock_sel,
-            "price_sample": parsed.get("price_sample"),
-            "stock_sample": parsed.get("stock_sample"),
-            "confidence": confidence,
             "model_used": model,
             "committed": False,
         }
