@@ -8,9 +8,8 @@ from pipeline.scraper import Scraper
 from pipeline.crawler import Crawler
 from pipeline.llm_extractor import Extractor
 from models.result import AvailabilityResult
-from db.models import TrackingPair, AvailabilitySnapshot
+from db.models import TrackingPair
 from db.writer import DBWriter
-from sqlalchemy import desc
 
 
 async def run_all(db_writer: DBWriter) -> dict:
@@ -49,7 +48,6 @@ async def run_all(db_writer: DBWriter) -> dict:
             availability.source = "llm_direct" if path == 'D' else "scraper"
 
             db_writer.write_snapshot(pair['id'], availability)
-            db_writer.update_pair_status(pair['id'], availability.status)
 
             pair_summary['price'] = availability.price
             pair_summary['status'] = availability.status 
@@ -144,7 +142,7 @@ def collect_run_summary(results: List[Dict[str, Any]]) -> dict:
         status = res.get('status')
         pair_id = res.get('pair_id')
         
-        if status == "COMPLETED":
+        if status in ("IN_STOCK", "OUT_OF_STOCK", "NOT_LISTED"):
             summary["completed"] += 1
         elif status == "NEEDS_SETUP":
             summary["needs_setup"].append(pair_id)
