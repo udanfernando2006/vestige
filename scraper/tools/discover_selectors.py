@@ -33,9 +33,9 @@ from dotenv import load_dotenv
 # whether the script is run from scraper/ or the project root.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from browser.session import BrowserSession
-from db.writer import DBWriter
-from pipeline.llm_extractor import Extractor
+from scraper.browser.session import BrowserSession
+from scraper.db.writer import DBWriter
+from scraper.pipeline.llm_extractor import Extractor
 
 load_dotenv()
 
@@ -216,7 +216,7 @@ async def _run(args) -> int:
     api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
-    extractor = Extractor({"engine": "cloud", "api_base": api_base, "api_key": api_key, "model_name": model})
+    extractor = Extractor({"engine": "cloud", "api_base": api_base, "api_key": api_key, "model_name": model, "provider": provider})
 
     cleaned_html = extractor.clean_html(raw_html)
 
