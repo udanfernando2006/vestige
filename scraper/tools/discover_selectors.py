@@ -207,23 +207,22 @@ async def _run(args) -> int:
 
     provider = os.environ.get("LLM_PROVIDER", "openrouter")
     model = os.environ.get("LLM_MODEL", "openrouter/free")
-    engine = os.environ.get("LLM_ENGINE", "local")
 
-    if provider == "local":
+    if provider == "ollama":
         print("Warning: Local models are not reliable for selector discovery. "
-          "Set LLM_ENGINE=cloud", file=sys.stderr)
+            "Set LLM_PROVIDER=openrouter or LLM_PROVIDER=anthropic.", file=sys.stderr)
         return 1
     
     api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
-    extractor = Extractor({"engine": engine, "api_base": api_base, "api_key": api_key, "model_name": model})
+    extractor = Extractor({"engine": "cloud", "api_base": api_base, "api_key": api_key, "model_name": model})
 
     cleaned_html = extractor.clean_html(raw_html)
 
-
+    title_context = target['book_name'] or 'unknown'
     print(f"Calling LLM ({provider} / {model})...")
-    selectors = extractor.extract_selectors(cleaned_html, target['book_name'])
+    selectors = extractor.extract_selectors(cleaned_html, title_context)
 
     if 'error' in selectors:
         print(f"Error: {selectors['error']}", file=sys.stderr)
