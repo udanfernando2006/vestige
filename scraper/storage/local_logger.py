@@ -5,17 +5,16 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-LOG_DIR = os.environ.get("LOG_DIR", "logs")
 
-
-def build_log_path(run_id: str) -> str:
+def build_log_path(run_id: str, log_dir: str = None) -> str:
     """
     Converts a run_id timestamp string to a file path.
     e.g. "2026-05-16T08:00:00Z" → "logs/2026/05/16/08-00-00.json"
     """
     dt = datetime.strptime(run_id, "%Y-%m-%dT%H:%M:%SZ")
+    base = log_dir or os.environ.get("LOG_DIR", "logs")
     return os.path.join(
-        LOG_DIR,
+        base,
         dt.strftime("%Y"),
         dt.strftime("%m"),
         dt.strftime("%d"),
@@ -23,7 +22,7 @@ def build_log_path(run_id: str) -> str:
     )
 
 
-def write_run_log(run_data: dict) -> None:
+def write_run_log(run_data: dict, log_dir: str = None) -> None:
     """
     Serialises the run summary dict to JSON and writes it to
     logs/YYYY/MM/DD/HH-MM-SS.json, creating directories as needed.
@@ -33,7 +32,7 @@ def write_run_log(run_data: dict) -> None:
     if not run_id:
         raise ValueError("run_data must contain a 'run_id' field")
 
-    path = build_log_path(run_id)
+    path = build_log_path(run_id, log_dir)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w", encoding="utf-8") as f:
@@ -43,12 +42,12 @@ def write_run_log(run_data: dict) -> None:
     print(f"[LocalLogger] Run log written → {path}")
 
 
-def list_recent_runs(limit: int = 20) -> list:
+def list_recent_runs(limit: int = 20, log_dir: str = None) -> list:
     """
     Returns file paths of the most recent run logs, newest first.
     Used by the Spring Boot RunController to serve GET /api/runs.
     """
-    base = Path(LOG_DIR)
+    base = Path(log_dir or os.environ.get("LOG_DIR", "logs"))
     if not base.exists():
         return []
 
