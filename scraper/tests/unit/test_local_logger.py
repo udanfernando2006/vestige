@@ -68,7 +68,9 @@ class TestWriteRunLog:
 
     def test_creates_parent_directories(self, log_dir):
         local_logger.write_run_log(SAMPLE_RUN, log_dir=log_dir)
-        log_path = Path(local_logger.build_log_path(SAMPLE_RUN["run_id"], log_dir=log_dir))
+        log_path = Path(
+            local_logger.build_log_path(SAMPLE_RUN["run_id"], log_dir=log_dir)
+        )
         assert log_path.parent.is_dir()
 
     def test_idempotent_on_repeat_write(self, log_dir):

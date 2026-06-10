@@ -99,9 +99,10 @@ If a field is entirely absent from the HTML context, return its field value conf
 HTML Content:
 {cleaned_html}"""
 
+
 class Extractor:
     def __init__(self, config: dict):
-        self.engine = config.get("engine", "local") # 'local' or 'cloud'
+        self.engine = config.get("engine", "local")  # 'local' or 'cloud'
         self.api_base = config.get("api_base", "http://localhost:11434/v1")
         self.api_key = config.get("api_key", "ollama")
         self.model_name = config.get("model_name", "qwen2.5-coder:3b")
@@ -110,31 +111,53 @@ class Extractor:
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
     def clean_html(self, html: str) -> str:
-        soup = BeautifulSoup(html, 'lxml')
-        
+        soup = BeautifulSoup(html, "lxml")
+
         # 1. Eliminate heavy operational components
-        tags_to_remove = ['script', 'style', 'nav', 'footer', 'header', 'svg', 'iframe', 'noscript', 'dialog', 'form']
+        tags_to_remove = [
+            "script",
+            "style",
+            "nav",
+            "footer",
+            "header",
+            "svg",
+            "iframe",
+            "noscript",
+            "dialog",
+            "form",
+        ]
         for tag in tags_to_remove:
             for element in soup.find_all(tag):
                 element.decompose()
-        
+
         # 2. Extract the main layout area immediately
         core_element = None
-        if soup.find('main'):
-            core_element = soup.find('main')
-        elif soup.find(id=re.compile(r'^(main|content|primary)$', re.IGNORECASE)):
-            core_element = soup.find(id=re.compile(r'^(main|content|primary)$', re.IGNORECASE))
-            
+        if soup.find("main"):
+            core_element = soup.find("main")
+        elif soup.find(id=re.compile(r"^(main|content|primary)$", re.IGNORECASE)):
+            core_element = soup.find(
+                id=re.compile(r"^(main|content|primary)$", re.IGNORECASE)
+            )
+
         if core_element:
-            soup = BeautifulSoup(str(core_element), 'lxml')
+            soup = BeautifulSoup(str(core_element), "lxml")
 
         # 3. Target and remove heavy sidebar components inside main
         # This completely wipes out the massive list of categories and filters!
         # FUTURE DATABASE TABLE???
         noise_selectors = [
-            'aside', '.sidebar', '#sidebar', '.widget-area', 
-            '.related', '.upsells', '.cross-sells', '.product-carousel',
-            '.woocommerce-tabs', '#reviews', '.social-share', '.cookie-notice'
+            "aside",
+            ".sidebar",
+            "#sidebar",
+            ".widget-area",
+            ".related",
+            ".upsells",
+            ".cross-sells",
+            ".product-carousel",
+            ".woocommerce-tabs",
+            "#reviews",
+            ".social-share",
+            ".cookie-notice",
         ]
         for selector in noise_selectors:
             for element in soup.select(selector):
@@ -145,34 +168,31 @@ class Extractor:
             # Strip all attributes to avoid token weight inflation
             for tag in soup.find_all(True):
                 tag.attrs = {}
-            
+
             # Return straight string representation to retain the native indentation lines
             # that small models use as positional anchors
             return str(soup)
-            
+
         else:
-            allowed_attrs = ['class', 'id']
+            allowed_attrs = ["class", "id"]
             for tag in soup.find_all(True):
                 tag.attrs = {k: v for k, v in tag.attrs.items() if k in allowed_attrs}
         return str(soup)
 
-    def extract_details(self, cleaned_html: str, target_title: str, fields: list = None) -> dict:
+    def extract_details(
+        self, cleaned_html: str, target_title: str, fields: list = None
+    ) -> dict:
         if not fields:
             fields = ["price", "stock_status", "description", "isbn"]
         user_content = SEMANTIC_USER_PROMPT.format(
-            target_title=target_title,
-            cleaned_html=cleaned_html,
-            fields=fields
+            target_title=target_title, cleaned_html=cleaned_html, fields=fields
         )
 
         return self._call_llm(user_content, SEMANTIC_SYSTEM_PROMPT)
 
-
-    
     def extract_selectors(self, cleaned_html: str, target_title: str) -> dict:
         user_content = SELECTOR_USER_PROMPT.format(
-            target_title=target_title,
-            cleaned_html=cleaned_html
+            target_title=target_title, cleaned_html=cleaned_html
         )
         raw_response = self._call_llm(user_content, SELECTOR_SYSTEM_PROMPT)
 
@@ -187,7 +207,7 @@ class Extractor:
                 "model": self.model_name,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
+                    {"role": "user", "content": user_content},
                 ],
                 "temperature": 0.0,
             }
@@ -196,23 +216,27 @@ class Extractor:
                 kwargs["response_format"] = {"type": "json_object"}
 
             response = self.client.chat.completions.create(**kwargs)
-            
+
             if not response or getattr(response, "choices", None) is None:
                 err_msg = "OpenRouter routing constraint failure (choices field is missing/None)."
                 if hasattr(response, "error") and response.error:
                     err_msg = f"OpenRouter Backend Error: {response.error}"
                 return {"error": err_msg}
-                
+
             if len(response.choices) == 0:
-                return {"error": "OpenRouter returned an empty choices selection array."}
-            
-            resolved_model = getattr(response, 'model', 'Unknown Fallback Model')
+                return {
+                    "error": "OpenRouter returned an empty choices selection array."
+                }
+
+            resolved_model = getattr(response, "model", "Unknown Fallback Model")
             print(f"[LLM]{self.provider.upper()} resolved to: {resolved_model}")
-                
+
             raw_content = response.choices[0].message.content
             if not raw_content:
-                return {"error": "Model executed but returned an empty response string."}
-                
+                return {
+                    "error": "Model executed but returned an empty response string."
+                }
+
             raw_content = raw_content.strip()
 
             if raw_content.startswith("```"):
@@ -224,6 +248,6 @@ class Extractor:
                 raw_content = "\n".join(lines).strip()
 
             return json.loads(raw_content)
-        
+
         except Exception as e:
             return {"error": f"LLM Request Failure: {e}"}

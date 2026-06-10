@@ -7,9 +7,9 @@ def crawler():
     return Crawler()
 
 
-ISBN  = "9780316452465"
+ISBN = "9780316452465"
 TITLE = "The Last Wish"
-BASE  = "https://sarasavi.lk"
+BASE = "https://sarasavi.lk"
 
 
 # ---------------------------------------------------------------------------
@@ -96,65 +96,91 @@ class TestExtractCandidateLinks:
 class TestScoreCandidates:
 
     def _score(self, crawler, links):
-        return crawler._score_candidates(
-            links, isbn=ISBN, title=TITLE, base_url=BASE
-        )
+        return crawler._score_candidates(links, isbn=ISBN, title=TITLE, base_url=BASE)
 
     def test_product_path_prefix_scores_high(self, crawler):
-        links = [{"href": "/product/last-wish", "text": "The Last Wish",
-                  "url": f"{BASE}/product/last-wish"}]
+        links = [
+            {
+                "href": "/product/last-wish",
+                "text": "The Last Wish",
+                "url": f"{BASE}/product/last-wish",
+            }
+        ]
         scored = self._score(crawler, links)
         assert len(scored) == 1
         assert scored[0]["url"] == f"{BASE}/product/last-wish"
 
     def test_isbn_in_url_boosts_score(self, crawler):
-        with_isbn    = {"href": f"/books/{ISBN}", "text": "The Last Wish",
-                        "url": f"{BASE}/books/{ISBN}"}
-        without_isbn = {"href": "/books/other-book", "text": "Other Book",
-                        "url": f"{BASE}/books/other-book"}
+        with_isbn = {
+            "href": f"/books/{ISBN}",
+            "text": "The Last Wish",
+            "url": f"{BASE}/books/{ISBN}",
+        }
+        without_isbn = {
+            "href": "/books/other-book",
+            "text": "Other Book",
+            "url": f"{BASE}/books/other-book",
+        }
         scored = self._score(crawler, [with_isbn, without_isbn])
         # The ISBN-bearing link should rank first
         assert scored[0]["url"] == f"{BASE}/books/{ISBN}"
 
     def test_social_media_links_excluded(self, crawler):
         links = [
-            {"href": "https://facebook.com/share", "text": "Share",
-             "url": "https://facebook.com/share"},
-            {"href": "https://twitter.com/intent/tweet", "text": "Tweet",
-             "url": "https://twitter.com/intent/tweet"},
+            {
+                "href": "https://facebook.com/share",
+                "text": "Share",
+                "url": "https://facebook.com/share",
+            },
+            {
+                "href": "https://twitter.com/intent/tweet",
+                "text": "Tweet",
+                "url": "https://twitter.com/intent/tweet",
+            },
         ]
         scored = self._score(crawler, links)
         assert scored == []
 
     def test_pagination_links_excluded(self, crawler):
         links = [
-            {"href": "/page/2", "text": "2",      "url": f"{BASE}/page/2"},
-            {"href": "/page/3", "text": "Next »",  "url": f"{BASE}/page/3"},
+            {"href": "/page/2", "text": "2", "url": f"{BASE}/page/2"},
+            {"href": "/page/3", "text": "Next »", "url": f"{BASE}/page/3"},
         ]
         scored = self._score(crawler, links)
         assert scored == []
 
     def test_category_and_tag_links_excluded(self, crawler):
         links = [
-            {"href": "/category/fiction",    "text": "Fiction",
-             "url": f"{BASE}/category/fiction"},
-            {"href": "/tag/fantasy",         "text": "Fantasy",
-             "url": f"{BASE}/tag/fantasy"},
+            {
+                "href": "/category/fiction",
+                "text": "Fiction",
+                "url": f"{BASE}/category/fiction",
+            },
+            {"href": "/tag/fantasy", "text": "Fantasy", "url": f"{BASE}/tag/fantasy"},
         ]
         scored = self._score(crawler, links)
         assert scored == []
 
     def test_results_sorted_descending_by_score(self, crawler):
         links = [
-            {"href": f"/books/{ISBN}", "text": TITLE,       "url": f"{BASE}/books/{ISBN}"},
-            {"href": "/books/other",   "text": "Other Book", "url": f"{BASE}/books/other"},
+            {"href": f"/books/{ISBN}", "text": TITLE, "url": f"{BASE}/books/{ISBN}"},
+            {
+                "href": "/books/other",
+                "text": "Other Book",
+                "url": f"{BASE}/books/other",
+            },
         ]
         scored = self._score(crawler, links)
         assert scored[0]["url"] == f"{BASE}/books/{ISBN}"
 
     def test_relative_urls_normalised_to_absolute(self, crawler):
-        links = [{"href": "/books/last-wish", "text": TITLE,
-                  "url": f"{BASE}/books/last-wish"}]
+        links = [
+            {
+                "href": "/books/last-wish",
+                "text": TITLE,
+                "url": f"{BASE}/books/last-wish",
+            }
+        ]
         scored = self._score(crawler, links)
         assert scored[0]["url"].startswith("https://")
 

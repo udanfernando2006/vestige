@@ -44,6 +44,7 @@ load_dotenv()
 # Data container for selector validation outcome
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationResult:
     price_passed: bool
@@ -57,7 +58,10 @@ class ValidationResult:
 # Step 1 — Resolve the target URL
 # ---------------------------------------------------------------------------
 
-def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]) -> dict:
+
+def load_target(
+    pair_id: Optional[int], url: Optional[str], store: Optional[str]
+) -> dict:
     """
     Resolves the product URL and store name.
     - --pair-id mode: fetches URL from the database
@@ -68,6 +72,7 @@ def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]
     """
     if pair_id is not None:
         from sqlalchemy import create_engine
+
         engine = create_engine(os.environ["DATABASE_URL"])
         db = DBWriter(engine)
         pair = db.get_pair(pair_id)
@@ -105,6 +110,7 @@ def load_target(pair_id: Optional[int], url: Optional[str], store: Optional[str]
 # Step 2 — Fetch the product page HTML
 # ---------------------------------------------------------------------------
 
+
 async def fetch_html(url: str) -> str:
     """Fetches the raw page HTML via Playwright. Cleaning is handled by extractor.clean_html()."""
     async with BrowserSession() as session:
@@ -116,7 +122,10 @@ async def fetch_html(url: str) -> str:
 # Step 6 — Validate selectors against the live page
 # ---------------------------------------------------------------------------
 
-async def validate_selectors(url: str, price_sel: str, stock_sel: str) -> ValidationResult:
+
+async def validate_selectors(
+    url: str, price_sel: str, stock_sel: str
+) -> ValidationResult:
     """
     Re-fetches the live page and runs both selectors with BeautifulSoup.
     A selector passes when it matches an element and the extracted text is plausible:
@@ -178,6 +187,7 @@ async def validate_selectors(url: str, price_sel: str, stock_sel: str) -> Valida
 # Step 7 — Commit validated selectors to the database
 # ---------------------------------------------------------------------------
 
+
 def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
     """
     Writes price_selector and stock_selector to tracking_pairs.
@@ -185,6 +195,7 @@ def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
     and transitions pair status from NEEDS_SETUP → PENDING automatically.
     """
     from sqlalchemy import create_engine
+
     engine = create_engine(os.environ["DATABASE_URL"])
     db = DBWriter(engine)
     db.update_pair_selectors(pair_id, price_sel, stock_sel)
@@ -193,6 +204,7 @@ def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
 # ---------------------------------------------------------------------------
 # Core async run logic
 # ---------------------------------------------------------------------------
+
 
 async def _run(args) -> int:
     """
@@ -211,32 +223,52 @@ async def _run(args) -> int:
     model = os.environ.get("LLM_MODEL", "openrouter/free")
 
     if provider == "ollama":
-        print("Warning: Local models are not reliable for selector discovery. "
-            "Set LLM_PROVIDER=openrouter or LLM_PROVIDER=anthropic.", file=sys.stderr)
+        print(
+            "Warning: Local models are not reliable for selector discovery. "
+            "Set LLM_PROVIDER=openrouter or LLM_PROVIDER=anthropic.",
+            file=sys.stderr,
+        )
         return 1
-    
+
     api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
-    extractor = Extractor({"engine": "cloud", "api_base": api_base, "api_key": api_key, "model_name": model, "provider": provider})
+    extractor = Extractor(
+        {
+            "engine": "cloud",
+            "api_base": api_base,
+            "api_key": api_key,
+            "model_name": model,
+            "provider": provider,
+        }
+    )
 
     cleaned_html = extractor.clean_html(raw_html)
 
-    title_context = target['book_name'] or 'unknown'
+    title_context = target["book_name"] or "unknown"
     print(f"Calling LLM ({provider} / {model})...")
     selectors = extractor.extract_selectors(cleaned_html, title_context)
 
-    if 'error' in selectors:
+    if "error" in selectors:
         print(f"Error: {selectors['error']}", file=sys.stderr)
         return 1
 
-    price_sel = selectors.get('price', {}).get('selector') if selectors.get('price') else None
-    stock_sel = selectors.get('availability', {}).get('selector') if selectors.get('availability') else None
+    price_sel = (
+        selectors.get("price", {}).get("selector") if selectors.get("price") else None
+    )
+    stock_sel = (
+        selectors.get("availability", {}).get("selector")
+        if selectors.get("availability")
+        else None
+    )
 
     # --commit: validate against the live page, then write to DB if both pass
     if args.commit:
         if not target["pair_id"]:
-            print("Error: --commit requires --pair-id (not available in --url mode)", file=sys.stderr)
+            print(
+                "Error: --commit requires --pair-id (not available in --url mode)",
+                file=sys.stderr,
+            )
             return 1
 
         print("Validating selectors against live page...")
@@ -280,25 +312,24 @@ async def _run(args) -> int:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="LLM-assisted CSS selector discovery for Vestige tracking pairs"
     )
     parser.add_argument(
-        "--pair-id", type=int,
-        help="Resolve product URL from a DB tracking pair by ID"
+        "--pair-id", type=int, help="Resolve product URL from a DB tracking pair by ID"
     )
     parser.add_argument(
-        "--url", type=str,
-        help="Direct product page URL (use with --store)"
+        "--url", type=str, help="Direct product page URL (use with --store)"
     )
     parser.add_argument(
-        "--store", type=str,
-        help="Store name — required when using --url"
+        "--store", type=str, help="Store name — required when using --url"
     )
     parser.add_argument(
-        "--commit", action="store_true",
-        help="Validate selectors against the live page and write to DB on success"
+        "--commit",
+        action="store_true",
+        help="Validate selectors against the live page and write to DB on success",
     )
     args = parser.parse_args()
 

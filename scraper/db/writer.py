@@ -30,58 +30,67 @@ class DBWriter:
         """Idempotently seeds DB with contents from books_config.json."""
         with self.Session() as session:
             # Sync Series
-            for series_data in config_data.get('series', []):
-                series = session.query(Series).filter_by(name=series_data['name']).first()
+            for series_data in config_data.get("series", []):
+                series = (
+                    session.query(Series).filter_by(name=series_data["name"]).first()
+                )
                 if not series:
-                    session.add(Series(name=series_data['name']))
+                    session.add(Series(name=series_data["name"]))
             session.commit()
 
             # Sync Books
-            for book_data in config_data.get('books', []):
-                book = session.query(Book).filter_by(isbn=book_data['isbn']).first()
+            for book_data in config_data.get("books", []):
+                book = session.query(Book).filter_by(isbn=book_data["isbn"]).first()
                 if not book:
                     series = None
-                    if book_data.get('series_name'):
-                        series = session.query(Series).filter_by(name=book_data['series_name']).first()
+                    if book_data.get("series_name"):
+                        series = (
+                            session.query(Series)
+                            .filter_by(name=book_data["series_name"])
+                            .first()
+                        )
 
                     book = Book(
-                        name=book_data['name'],
-                        isbn=book_data['isbn'],
-                        is_series_entry=book_data.get('is_series_entry', False),
-                        series_id=series.id if series else None
+                        name=book_data["name"],
+                        isbn=book_data["isbn"],
+                        is_series_entry=book_data.get("is_series_entry", False),
+                        series_id=series.id if series else None,
                     )
                     session.add(book)
             session.commit()
 
             # Sync Stores
-            for store_data in config_data.get('stores', []):
-                store = session.query(Store).filter_by(name=store_data['name']).first()
+            for store_data in config_data.get("stores", []):
+                store = session.query(Store).filter_by(name=store_data["name"]).first()
                 if not store:
                     store = Store(
-                        name=store_data['name'],
-                        base_url=store_data['base_url'],
-                        search_url_template=store_data.get('search_url_template')
+                        name=store_data["name"],
+                        base_url=store_data["base_url"],
+                        search_url_template=store_data.get("search_url_template"),
                     )
                     session.add(store)
             session.commit()
 
             # Sync Tracking Pairs
-            for tracking_data in config_data.get('tracking', []):
-                book = session.query(Book).filter_by(isbn=tracking_data['isbn']).first()
-                store = session.query(Store).filter_by(name=tracking_data['store']).first()
+            for tracking_data in config_data.get("tracking", []):
+                book = session.query(Book).filter_by(isbn=tracking_data["isbn"]).first()
+                store = (
+                    session.query(Store).filter_by(name=tracking_data["store"]).first()
+                )
 
                 if book and store:
-                    pair = session.query(TrackingPair).filter_by(
-                        book_id=book.id,
-                        store_id=store.id
-                    ).first()
+                    pair = (
+                        session.query(TrackingPair)
+                        .filter_by(book_id=book.id, store_id=store.id)
+                        .first()
+                    )
                     if not pair:
-                        status = 'SKIP' if tracking_data.get('skip') else 'PENDING'
+                        status = "SKIP" if tracking_data.get("skip") else "PENDING"
                         pair = TrackingPair(
                             book_id=book.id,
                             store_id=store.id,
-                            product_url=tracking_data.get('product_url'),
-                            status=status
+                            product_url=tracking_data.get("product_url"),
+                            status=status,
                         )
                         session.add(pair)
             session.commit()
@@ -97,26 +106,28 @@ class DBWriter:
         Returns dicts to avoid detached session issues.
         """
         with self.Session() as session:
-            pairs = session.query(TrackingPair).filter(
-                TrackingPair.status.notin_(['SKIP', 'NEEDS_SETUP'])
-            ).options(
-                joinedload(TrackingPair.book),
-                joinedload(TrackingPair.store)
-            ).all()
+            pairs = (
+                session.query(TrackingPair)
+                .filter(TrackingPair.status.notin_(["SKIP", "NEEDS_SETUP"]))
+                .options(joinedload(TrackingPair.book), joinedload(TrackingPair.store))
+                .all()
+            )
 
             return [
                 {
-                    'id': p.id,
-                    'book_id': p.book_id,
-                    'store_id': p.store_id,
-                    'product_url': p.product_url,
-                    'price_selector': p.price_selector,
-                    'stock_selector': p.stock_selector,
-                    'status': p.status,
-                    'selector_found_at': p.selector_found_at.isoformat() if p.selector_found_at else None,
-                    'book_name': p.book.name,
-                    'book_isbn': p.book.isbn,
-                    'store_name': p.store.name,
+                    "id": p.id,
+                    "book_id": p.book_id,
+                    "store_id": p.store_id,
+                    "product_url": p.product_url,
+                    "price_selector": p.price_selector,
+                    "stock_selector": p.stock_selector,
+                    "status": p.status,
+                    "selector_found_at": (
+                        p.selector_found_at.isoformat() if p.selector_found_at else None
+                    ),
+                    "book_name": p.book.name,
+                    "book_isbn": p.book.isbn,
+                    "store_name": p.store.name,
                 }
                 for p in pairs
             ]
@@ -124,24 +135,27 @@ class DBWriter:
     def get_all_pairs(self) -> List[Dict[str, Any]]:
         """Get all tracking pairs (including SKIP and NEEDS_SETUP)."""
         with self.Session() as session:
-            pairs = session.query(TrackingPair).options(
-                joinedload(TrackingPair.book),
-                joinedload(TrackingPair.store)
-            ).all()
+            pairs = (
+                session.query(TrackingPair)
+                .options(joinedload(TrackingPair.book), joinedload(TrackingPair.store))
+                .all()
+            )
 
             return [
                 {
-                    'id': p.id,
-                    'book_id': p.book_id,
-                    'store_id': p.store_id,
-                    'product_url': p.product_url,
-                    'price_selector': p.price_selector,
-                    'stock_selector': p.stock_selector,
-                    'status': p.status,
-                    'selector_found_at': p.selector_found_at.isoformat() if p.selector_found_at else None,
-                    'book_name': p.book.name,
-                    'book_isbn': p.book.isbn,
-                    'store_name': p.store.name,
+                    "id": p.id,
+                    "book_id": p.book_id,
+                    "store_id": p.store_id,
+                    "product_url": p.product_url,
+                    "price_selector": p.price_selector,
+                    "stock_selector": p.stock_selector,
+                    "status": p.status,
+                    "selector_found_at": (
+                        p.selector_found_at.isoformat() if p.selector_found_at else None
+                    ),
+                    "book_name": p.book.name,
+                    "book_isbn": p.book.isbn,
+                    "store_name": p.store.name,
                 }
                 for p in pairs
             ]
@@ -149,50 +163,56 @@ class DBWriter:
     def get_pair(self, pair_id: int) -> Optional[Dict[str, Any]]:
         """Get a single tracking pair by ID."""
         with self.Session() as session:
-            pair = session.query(TrackingPair).filter_by(id=pair_id).options(
-                joinedload(TrackingPair.book),
-                joinedload(TrackingPair.store)
-            ).first()
+            pair = (
+                session.query(TrackingPair)
+                .filter_by(id=pair_id)
+                .options(joinedload(TrackingPair.book), joinedload(TrackingPair.store))
+                .first()
+            )
 
             if not pair:
                 return None
 
             return {
-                'id': pair.id,
-                'book_id': pair.book_id,
-                'store_id': pair.store_id,
-                'product_url': pair.product_url,
-                'price_selector': pair.price_selector,
-                'stock_selector': pair.stock_selector,
-                'status': pair.status,
-                'selector_found_at': pair.selector_found_at.isoformat() if pair.selector_found_at else None,
-                'book_name': pair.book.name,
-                'book_isbn': pair.book.isbn,
-                'store_name': pair.store.name,
+                "id": pair.id,
+                "book_id": pair.book_id,
+                "store_id": pair.store_id,
+                "product_url": pair.product_url,
+                "price_selector": pair.price_selector,
+                "stock_selector": pair.stock_selector,
+                "status": pair.status,
+                "selector_found_at": (
+                    pair.selector_found_at.isoformat()
+                    if pair.selector_found_at
+                    else None
+                ),
+                "book_name": pair.book.name,
+                "book_isbn": pair.book.isbn,
+                "store_name": pair.store.name,
             }
 
     def get_pairs_needing_setup(self) -> List[Dict[str, Any]]:
         """Get all pairs with status NEEDS_SETUP."""
         with self.Session() as session:
-            pairs = session.query(TrackingPair).filter_by(
-                status='NEEDS_SETUP'
-            ).options(
-                joinedload(TrackingPair.book),
-                joinedload(TrackingPair.store)
-            ).all()
+            pairs = (
+                session.query(TrackingPair)
+                .filter_by(status="NEEDS_SETUP")
+                .options(joinedload(TrackingPair.book), joinedload(TrackingPair.store))
+                .all()
+            )
 
             return [
                 {
-                    'id': p.id,
-                    'book_id': p.book_id,
-                    'store_id': p.store_id,
-                    'product_url': p.product_url,
-                    'price_selector': p.price_selector,
-                    'stock_selector': p.stock_selector,
-                    'status': p.status,
-                    'book_name': p.book.name,
-                    'book_isbn': p.book.isbn,
-                    'store_name': p.store.name,
+                    "id": p.id,
+                    "book_id": p.book_id,
+                    "store_id": p.store_id,
+                    "product_url": p.product_url,
+                    "price_selector": p.price_selector,
+                    "stock_selector": p.stock_selector,
+                    "status": p.status,
+                    "book_name": p.book.name,
+                    "book_isbn": p.book.isbn,
+                    "store_name": p.store.name,
                 }
                 for p in pairs
             ]
@@ -210,10 +230,10 @@ class DBWriter:
                 return None
 
             return {
-                'id': store.id,
-                'name': store.name,
-                'base_url': store.base_url,
-                'search_url_template': store.search_url_template,
+                "id": store.id,
+                "name": store.name,
+                "base_url": store.base_url,
+                "search_url_template": store.search_url_template,
             }
 
     def get_all_stores(self) -> List[Dict[str, Any]]:
@@ -223,10 +243,10 @@ class DBWriter:
 
             return [
                 {
-                    'id': s.id,
-                    'name': s.name,
-                    'base_url': s.base_url,
-                    'search_url_template': s.search_url_template,
+                    "id": s.id,
+                    "name": s.name,
+                    "base_url": s.base_url,
+                    "search_url_template": s.search_url_template,
                 }
                 for s in stores
             ]
@@ -242,12 +262,12 @@ class DBWriter:
 
             return [
                 {
-                    'id': b.id,
-                    'name': b.name,
-                    'isbn': b.isbn,
-                    'is_series_entry': b.is_series_entry,
-                    'series_id': b.series_id,
-                    'series_name': b.series.name if b.series else None,
+                    "id": b.id,
+                    "name": b.name,
+                    "isbn": b.isbn,
+                    "is_series_entry": b.is_series_entry,
+                    "series_id": b.series_id,
+                    "series_name": b.series.name if b.series else None,
                 }
                 for b in books
             ]
@@ -259,8 +279,8 @@ class DBWriter:
 
             return [
                 {
-                    'id': s.id,
-                    'name': s.name,
+                    "id": s.id,
+                    "name": s.name,
                 }
                 for s in series_list
             ]
@@ -272,21 +292,24 @@ class DBWriter:
     def get_last_snapshot(self, pair_id: int) -> Optional[Dict[str, Any]]:
         """Gets the most recent scrape state for a pair, if any."""
         with self.Session() as session:
-            snapshot = session.query(AvailabilitySnapshot).filter_by(
-                pair_id=pair_id
-            ).order_by(desc(AvailabilitySnapshot.scraped_at)).first()
+            snapshot = (
+                session.query(AvailabilitySnapshot)
+                .filter_by(pair_id=pair_id)
+                .order_by(desc(AvailabilitySnapshot.scraped_at))
+                .first()
+            )
 
             if not snapshot:
                 return None
 
             return {
-                'id': snapshot.id,
-                'pair_id': snapshot.pair_id,
-                'in_stock': snapshot.in_stock,
-                'price': float(snapshot.price) if snapshot.price else None,
-                'status': snapshot.status,
-                'source': snapshot.source,
-                'scraped_at': snapshot.scraped_at.isoformat(),
+                "id": snapshot.id,
+                "pair_id": snapshot.pair_id,
+                "in_stock": snapshot.in_stock,
+                "price": float(snapshot.price) if snapshot.price else None,
+                "status": snapshot.status,
+                "source": snapshot.source,
+                "scraped_at": snapshot.scraped_at.isoformat(),
             }
 
     def get_history(self, isbn: str, limit: int = 100) -> List[Dict[str, Any]]:
@@ -295,26 +318,29 @@ class DBWriter:
         Used by the UI's History page.
         """
         with self.Session() as session:
-            snapshots = session.query(AvailabilitySnapshot).join(
-                TrackingPair
-            ).join(
-                Book
-            ).filter(
-                Book.isbn == isbn
-            ).order_by(
-                desc(AvailabilitySnapshot.scraped_at)
-            ).limit(limit).options(
-                joinedload(AvailabilitySnapshot.tracking_pair).joinedload(TrackingPair.store)
-            ).all()
+            snapshots = (
+                session.query(AvailabilitySnapshot)
+                .join(TrackingPair)
+                .join(Book)
+                .filter(Book.isbn == isbn)
+                .order_by(desc(AvailabilitySnapshot.scraped_at))
+                .limit(limit)
+                .options(
+                    joinedload(AvailabilitySnapshot.tracking_pair).joinedload(
+                        TrackingPair.store
+                    )
+                )
+                .all()
+            )
 
             return [
                 {
-                    'store_name': s.tracking_pair.store.name,
-                    'status': s.status,
-                    'price': float(s.price) if s.price else None,
-                    'in_stock': s.in_stock,
-                    'scraped_at': s.scraped_at.isoformat(),
-                    'source': s.source,
+                    "store_name": s.tracking_pair.store.name,
+                    "status": s.status,
+                    "price": float(s.price) if s.price else None,
+                    "in_stock": s.in_stock,
+                    "scraped_at": s.scraped_at.isoformat(),
+                    "source": s.source,
                 }
                 for s in snapshots
             ]
@@ -323,10 +349,12 @@ class DBWriter:
     # SNAPSHOT WRITES
     # =========================================================================
 
-    def write_snapshot(self, pair_id: int, result_obj: AvailabilityResult) -> Dict[str, Any]:
+    def write_snapshot(
+        self, pair_id: int, result_obj: AvailabilityResult
+    ) -> Dict[str, Any]:
         """
         Writes an immutable snapshot and updates the tracking pair's current status.
-        
+
         Args:
             pair_id: ID of the tracking pair
             result_obj: AvailabilityResult with in_stock, price, status fields
@@ -339,7 +367,7 @@ class DBWriter:
                 price=result_obj.price,
                 status=result_obj.status,
                 source=result_obj.source,
-                scraped_at=datetime.now(timezone.utc)
+                scraped_at=datetime.now(timezone.utc),
             )
             session.add(snapshot)
 
@@ -351,13 +379,13 @@ class DBWriter:
             session.commit()
 
             return {
-                'id': snapshot.id,
-                'pair_id': snapshot.pair_id,
-                'status': snapshot.status,
-                'price': float(snapshot.price) if snapshot.price else None,
-                'in_stock': snapshot.in_stock,
-                'source': snapshot.source,
-                'scraped_at': snapshot.scraped_at.isoformat(),
+                "id": snapshot.id,
+                "pair_id": snapshot.pair_id,
+                "status": snapshot.status,
+                "price": float(snapshot.price) if snapshot.price else None,
+                "in_stock": snapshot.in_stock,
+                "source": snapshot.source,
+                "scraped_at": snapshot.scraped_at.isoformat(),
             }
 
     # =========================================================================
@@ -380,12 +408,14 @@ class DBWriter:
                 pair.product_url = product_url
                 session.commit()
 
-    def update_pair_selectors(self, pair_id: int, price_sel: str, stock_sel: str) -> None:
+    def update_pair_selectors(
+        self, pair_id: int, price_sel: str, stock_sel: str
+    ) -> None:
         """
         Save validated selectors and transition pair from NEEDS_SETUP to PENDING.
         Called by discover_selectors.py after validation passes.
         Also called by API PATCH endpoint when user manually enters selectors.
-        
+
         ✅ FIXED: Now auto-transitions from NEEDS_SETUP to PENDING
         """
         with self.Session() as session:
@@ -394,11 +424,11 @@ class DBWriter:
                 pair.price_selector = price_sel
                 pair.stock_selector = stock_sel
                 pair.selector_found_at = datetime.now(timezone.utc)
-                
+
                 # Auto-transition from NEEDS_SETUP to PENDING when selectors provided
-                if pair.status == 'NEEDS_SETUP':
-                    pair.status = 'PENDING'
-                
+                if pair.status == "NEEDS_SETUP":
+                    pair.status = "PENDING"
+
                 session.commit()
 
     def clear_pair_selectors(self, pair_id: int) -> None:
@@ -412,7 +442,7 @@ class DBWriter:
                 pair.price_selector = None
                 pair.stock_selector = None
                 pair.selector_found_at = None
-                pair.status = 'NEEDS_SETUP'
+                pair.status = "NEEDS_SETUP"
                 session.commit()
 
     # =========================================================================
@@ -423,7 +453,7 @@ class DBWriter:
         """
         Cache the discovered search URL template on a store.
         Called by Orchestrator after Crawler's discovery phase completes.
-        
+
         Example: "https://sarasavi.lk/?s=test"
         Crawler replaces '=test' with '={encoded_query}'
         """

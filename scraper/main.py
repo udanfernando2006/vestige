@@ -12,6 +12,7 @@ from storage.local_logger import write_run_log
 
 load_dotenv()
 
+
 async def main():
     engine = create_engine(os.environ["DATABASE_URL"])
     Base.metadata.create_all(engine)  # safe to call on every run
@@ -23,5 +24,6 @@ async def main():
 
     summary = await orchestrator.run_all(db)
     write_run_log(summary)
+
 
 asyncio.run(main())

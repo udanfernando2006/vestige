@@ -10,9 +10,9 @@ from models.result import AvailabilityResult
 def seeded_pair_c(db_session, db_writer):
     """A tracking pair in PENDING state with URL and selectors already set."""
     from db.models import Book, Store, TrackingPair
+
     store = Store(name="path_c_store", base_url="https://sarasavi.lk")
-    book  = Book(name="The Last Wish", isbn="9780316452001",
-                 is_series_entry=False)
+    book = Book(name="The Last Wish", isbn="9780316452001", is_series_entry=False)
     db_session.add_all([store, book])
     db_session.commit()
     pair = TrackingPair(
@@ -48,10 +48,14 @@ class TestPathC:
 
         orchestrator = Orchestrator(db_writer=db_writer)
 
-        with patch("pipeline.scraper.Scraper.scrape",
-                   new=AsyncMock(return_value=expected_result)):
-            with patch("pipeline.orchestrator.BrowserSession",
-                       return_value=mock_browser_session):
+        with patch(
+            "pipeline.scraper.Scraper.scrape",
+            new=AsyncMock(return_value=expected_result),
+        ):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         snapshot = (
@@ -68,18 +72,25 @@ class TestPathC:
         from db.models import TrackingPair
 
         result = AvailabilityResult(
-            in_stock=True, price=1500.00, currency="LKR",
-            raw_price_text="LKR 1,500.00", raw_stock_text="In Stock",
+            in_stock=True,
+            price=1500.00,
+            currency="LKR",
+            raw_price_text="LKR 1,500.00",
+            raw_stock_text="In Stock",
             scraped_at=datetime.now(timezone.utc),
-            status="IN_STOCK", source="scraper",
+            status="IN_STOCK",
+            source="scraper",
         )
 
         orchestrator = Orchestrator(db_writer=db_writer)
 
-        with patch("pipeline.scraper.Scraper.scrape",
-                   new=AsyncMock(return_value=result)):
-            with patch("pipeline.orchestrator.BrowserSession",
-                       return_value=mock_browser_session):
+        with patch(
+            "pipeline.scraper.Scraper.scrape", new=AsyncMock(return_value=result)
+        ):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_c["id"])
@@ -95,18 +106,26 @@ class TestPathC:
         from db.models import TrackingPair
 
         error_result = AvailabilityResult(
-            in_stock=None, price=None, currency=None,
-            raw_price_text=None, raw_stock_text=None,
+            in_stock=None,
+            price=None,
+            currency=None,
+            raw_price_text=None,
+            raw_stock_text=None,
             scraped_at=datetime.now(timezone.utc),
-            status="ERROR", reason="selector_not_found", source="scraper",
+            status="ERROR",
+            reason="selector_not_found",
+            source="scraper",
         )
 
         orchestrator = Orchestrator(db_writer=db_writer)
 
-        with patch("pipeline.scraper.Scraper.scrape",
-                   new=AsyncMock(return_value=error_result)):
-            with patch("pipeline.orchestrator.BrowserSession",
-                       return_value=mock_browser_session):
+        with patch(
+            "pipeline.scraper.Scraper.scrape", new=AsyncMock(return_value=error_result)
+        ):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_c["id"])

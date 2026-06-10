@@ -9,8 +9,9 @@ from models.result import AvailabilityResult
 @pytest.fixture
 def seeded_pair_d(db_session, db_writer):
     from db.models import Book, Store, TrackingPair
+
     store = Store(name="path_d_store", base_url="https://vijithayapa.com")
-    book  = Book(name="Dune", isbn="9780441013001", is_series_entry=False)
+    book = Book(name="Dune", isbn="9780441013001", is_series_entry=False)
     db_session.add_all([store, book])
     db_session.commit()
     pair = TrackingPair(
@@ -50,8 +51,10 @@ class TestPathD:
             "pipeline.llm_extractor.Extractor._call_llm",
             return_value=llm_direct_response,
         ):
-            with patch("pipeline.orchestrator.BrowserSession",
-                       return_value=mock_browser_session):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         snapshot = (
@@ -80,8 +83,10 @@ class TestPathD:
             "pipeline.llm_extractor.Extractor._call_llm",
             return_value=llm_direct_response,
         ):
-            with patch("pipeline.orchestrator.BrowserSession",
-                       return_value=mock_browser_session):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_d["id"])

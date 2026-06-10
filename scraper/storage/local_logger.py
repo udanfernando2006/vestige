@@ -18,7 +18,7 @@ def build_log_path(run_id: str, log_dir: str = None) -> str:
         dt.strftime("%Y"),
         dt.strftime("%m"),
         dt.strftime("%d"),
-        dt.strftime("%H-%M-%S") + ".json"
+        dt.strftime("%H-%M-%S") + ".json",
     )
 
 

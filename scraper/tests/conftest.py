@@ -17,6 +17,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env.test")
 
+
 def load_fixture(filename: str) -> str:
     """Return the text content of a fixture file."""
     return (FIXTURES_DIR / filename).read_text(encoding="utf-8")
@@ -55,6 +56,7 @@ def llm_direct_response() -> dict:
 # ---------------------------------------------------------------------------
 # Database fixtures (integration + E2E only)
 # ---------------------------------------------------------------------------
+
 
 def _get_test_db_url() -> str:
     """
@@ -105,11 +107,13 @@ def db_session(db_engine):
     finally:
         session.close()
 
+
 @pytest.fixture(autouse=True)
 def clean_db(db_engine):
     """Truncate all tables after every test for a clean slate."""
     yield
     from db.models import Base
+
     with db_engine.connect() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
@@ -128,6 +132,7 @@ def db_writer(db_engine):
             writer = DBWriter()
     """
     from db.writer import DBWriter
+
     return DBWriter(db_engine)
 
 
