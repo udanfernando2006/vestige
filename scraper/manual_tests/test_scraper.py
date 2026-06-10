@@ -1,7 +1,8 @@
 import asyncio
-from pipeline.scraper import Scraper
 import json
+
 from dataclasses import asdict
+from pipeline.scraper import Scraper
 
 
 async def scrape_with_limit(semaphore, pair):
