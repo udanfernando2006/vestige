@@ -1,76 +1,79 @@
 name: CI
 
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main, dev]
+    pull_request:
+        branches: [main]
 
 jobs:
-  # -------------------------------------------------------------------------
-  # Python — unit + integration + E2E
-  # -------------------------------------------------------------------------
-  python:
-    name: Python tests
-    runs-on: ubuntu-latest
+    # -------------------------------------------------------------------------
+    # Python — unit + integration + E2E
+    # -------------------------------------------------------------------------
+    python:
+        name: Python tests
+        runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_USER: booktracker
+                    POSTGRES_PASSWORD: testpassword
+                    POSTGRES_DB: vestige_test
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
         env:
-          POSTGRES_USER:     booktracker
-          POSTGRES_PASSWORD: testpassword
-          POSTGRES_DB:       vestige_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+            # psycopg3 dialect prefix required by SQLAlchemy 2.x
+            DATABASE_URL: postgresql+psycopg://booktracker:testpassword@localhost:5432/vestige_test
+            POSTGRES_USER: booktracker
+            POSTGRES_PASSWORD: testpassword
+            # LLM env vars — values are irrelevant because all LLM calls are mocked
+            LLM_DISCOVERY_ENABLED: "false"
+            LLM_MODE: direct
+            LLM_ENGINE: cloud
+            LLM_PROVIDER: openrouter
+            LLM_MODEL: anthropic/claude-haiku-4-5
+            OPENROUTER_API_KEY: test-key-not-used
+            ANTHROPIC_API_KEY: test-key-not-used
+            # Logging
+            LOG_DIR: /tmp/vestige-test-logs
 
-    env:
-      # psycopg3 dialect prefix required by SQLAlchemy 2.x
-      DATABASE_URL:            postgresql+psycopg://booktracker:testpassword@localhost:5432/vestige_test
-      POSTGRES_USER:           booktracker
-      POSTGRES_PASSWORD:       testpassword
-      # LLM env vars — values are irrelevant because all LLM calls are mocked
-      LLM_DISCOVERY_ENABLED:   "false"
-      LLM_MODE:                direct
-      LLM_ENGINE:              cloud
-      LLM_PROVIDER:            openrouter
-      LLM_MODEL:               anthropic/claude-haiku-4-5
-      OPENROUTER_API_KEY:      test-key-not-used
-      ANTHROPIC_API_KEY:       test-key-not-used
-      # Logging
-      LOG_DIR:                 /tmp/vestige-test-logs
+        defaults:
+            run:
+                working-directory: scraper # all pip/pytest commands run from scraper/
 
-    defaults:
-      run:
-        working-directory: scraper    # all pip/pytest commands run from scraper/
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+            - name: Set up Python 3.12
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+                  cache: pip
+                  cache-dependency-path: scraper/requirements-dev.txt
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: scraper/requirements.txt
+            - name: Install dependencies
+              # Playwright browsers are NOT installed here — no test needs a real browser.
+              # If you later add browser-smoke tests in a separate job, add:
+              #   python -m playwright install chromium
+              run: pip install -r requirements-dev.txt
 
-      - name: Install dependencies
-        # Playwright browsers are NOT installed here — no test needs a real browser.
-        # If you later add browser-smoke tests in a separate job, add:
-        #   python -m playwright install chromium
-        run: pip install -r requirements.txt
-      
-      - name: Format check
-        run: black --check .
+            - name: Audit Python dependencies for known vulnerabilities
+              run: pip-audit -r requirements-dev.txt
 
-      - name: Lint
-        run: ruff check .
+            - name: Format check
+              run: black --check .
 
-      - name: Run tests
-        run: pytest tests/
+            - name: Lint
+              run: ruff check .
+
+            - name: Run tests
+              run: pytest tests/

@@ -14,5 +14,3 @@ __pycache__/
 *.pyd
 /scraper/cloud_config.py
 /scraper/logs
-
-*.txt
