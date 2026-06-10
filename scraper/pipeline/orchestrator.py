@@ -26,7 +26,7 @@ class Orchestrator:
         run_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         start_time = datetime.datetime.now(datetime.timezone.utc)
 
-        pairs = self.load_active_pairs(self.db_writer)
+        pairs = self.load_active_pairs()
         print(f"[{run_id}] Starting run — {len(pairs)} active pairs")
 
         all_results = []
@@ -35,7 +35,7 @@ class Orchestrator:
 
         for pair in pairs:
             path = self.determine_path(pair)
-            result = await self.run_pair(pair, path, self.db_writer)
+            result = await self.run_pair(pair, path)
 
             pair_summary = {
                 "pair_id": pair['id'],
@@ -311,5 +311,5 @@ class Orchestrator:
                     raise Exception(f"Unknown path routing: {path}")
                     
             except Exception as e:
-                err_result = self.handle_error(pair, e, self.db_writer)
+                err_result = self.handle_error(pair, e)
                 return {"pair_id": pair['id'], "status": err_result.status, "reason": err_result.reason}
