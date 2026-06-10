@@ -1,10 +1,11 @@
 import pytest
 from pipeline.orchestrator import Orchestrator
+from unittest.mock import MagicMock
 
 
 @pytest.fixture(scope="module")
 def orchestrator():
-    return Orchestrator()
+    return Orchestrator(db_writer=MagicMock())
 
 
 def _pair(

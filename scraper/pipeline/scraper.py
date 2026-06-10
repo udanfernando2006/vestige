@@ -140,18 +140,24 @@ class Scraper:
     def parse_stock_status(self, raw_text: str):
         if not raw_text:
             return None
-        
+
         text = raw_text.lower().strip()
-        
-        # In stock indicators
-        if any(phrase in text for phrase in ['in stock', 'available', 'in stock now', 'ready to ship']):
-            return True
-        
-        # Out of stock indicators
-        if any(phrase in text for phrase in ['out of stock', 'sold out', 'unavailable', 'pre-order']):
+
+        # Out of stock checked FIRST — "unavailable" contains "available"
+        # so order between the two blocks is critical
+        if any(phrase in text for phrase in [
+            'out of stock', 'sold out', 'unavailable',
+            'not available', 'pre-order', 'out-of-stock',
+        ]):
             return False
-        
-        # Unclear
+
+        if any(phrase in text for phrase in [
+            'in stock', 'in-stock', 'available',
+            'add to cart', 'add to basket',
+            'in stock now', 'ready to ship', 'buy now',
+        ]):
+            return True
+
         return None
 
     def check_response_status(self, status_code: int):

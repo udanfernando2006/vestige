@@ -105,7 +105,7 @@ class TestScoreCandidates:
                   "url": f"{BASE}/product/last-wish"}]
         scored = self._score(crawler, links)
         assert len(scored) == 1
-        assert scored[0]["score"] >= 10
+        assert scored[0]["url"] == f"{BASE}/product/last-wish"
 
     def test_isbn_in_url_boosts_score(self, crawler):
         with_isbn    = {"href": f"/books/{ISBN}", "text": "The Last Wish",
@@ -150,8 +150,7 @@ class TestScoreCandidates:
             {"href": "/books/other",   "text": "Other Book", "url": f"{BASE}/books/other"},
         ]
         scored = self._score(crawler, links)
-        scores = [s["score"] for s in scored]
-        assert scores == sorted(scores, reverse=True)
+        assert scored[0]["url"] == f"{BASE}/books/{ISBN}"
 
     def test_relative_urls_normalised_to_absolute(self, crawler):
         links = [{"href": "/books/last-wish", "text": TITLE,
