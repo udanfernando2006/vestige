@@ -1,4 +1,3 @@
-
 SAMPLE_CONFIG = {
     "series": [{"name": "The Witcher"}],
     "books": [

@@ -1,4 +1,3 @@
-
 from browser.session import BrowserSession
 from urllib.parse import quote_plus, urljoin
 from bs4 import BeautifulSoup
