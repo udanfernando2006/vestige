@@ -77,7 +77,7 @@ class TestExtractCandidateLinks:
         html = '<a name="top">Anchor with no href</a>'
         links = crawler._extract_candidate_links(html)
         # Anchors with no href are not navigable — should be excluded or have empty href
-        hrefs = [l["href"] for l in links if l.get("href")]
+        hrefs = [link["href"] for link in links if link.get("href")]
         assert all(h for h in hrefs)  # no empty href strings
 
     def test_returns_url_field_with_href(self, crawler, search_results_html):

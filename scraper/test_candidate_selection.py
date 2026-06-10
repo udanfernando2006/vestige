@@ -24,7 +24,7 @@ async def test_candidate_selection():
         print("=" * 70)
 
         # 1. Discover search endpoint
-        print(f"\n[1] Discovering search endpoint...")
+        print("\n[1] Discovering search endpoint...")
         discovery = await crawler.discover_search_endpoint(base_url)
 
         if not discovery["success"]:
@@ -40,7 +40,7 @@ async def test_candidate_selection():
         print(f"    URL: {search_url}")
 
         # 3. Fetch search results
-        print(f"\n[3] Fetching search results...")
+        print("\n[3] Fetching search results...")
         html = await crawler.fetch_search_results(search_url)
         if html:
             print(f"    Got {len(html)} bytes of HTML")
@@ -49,12 +49,12 @@ async def test_candidate_selection():
             continue
 
         # 4. Extract candidate links
-        print(f"\n[4] Extracting candidate links...")
+        print("\n[4] Extracting candidate links...")
         links = crawler.extract_candidate_links(html)
         print(f"    Found {len(links)} total links")
 
         # 5. Score candidates
-        print(f"\n[5] Scoring candidates by title match...")
+        print("\n[5] Scoring candidates by title match...")
         parsed = urlparse(base_url)
         base_url_normalized = f"{parsed.scheme}://{parsed.netloc}"
 

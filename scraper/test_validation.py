@@ -54,18 +54,18 @@ async def test_validate_candidates():
 
     # Step 2: User picks one (simulate: pick first)
     picked_candidate = candidates[0]
-    print(f"\n[4] User selected candidate [1]")
+    print("\n[4] User selected candidate [1]")
     print(f"    URL: {picked_candidate['url']}")
 
     # Step 3: Validate before passing to NLP
-    print(f"\n[5] Validating product page...")
+    print("\n[5] Validating product page...")
     validation = await crawler.validate_product_page(
         picked_candidate["url"], title=book_title, isbn=None
     )
 
     print(f"\n    Validation Score: {validation['validation_score']}/10")
     print(f"    Valid: {validation['valid']}")
-    print(f"    Findings:")
+    print("    Findings:")
     for key, value in validation["findings"].items():
         print(f"      - {key}: {value}")
 

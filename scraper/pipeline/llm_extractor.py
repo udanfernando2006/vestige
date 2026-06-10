@@ -1,8 +1,7 @@
 import json
-import os
 import re
 from openai import OpenAI
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
 
 SEMANTIC_SYSTEM_PROMPT = """You are a highly precise, data-focused extraction engine. Your only task is to convert raw semantic text layout data into structured JSON matching the requested schema. Do not write explanations, markdown syntax code blocks around the JSON object, or conversational replies. Return ONLY raw JSON."""
 

@@ -1,9 +1,7 @@
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import patch
 
 from pipeline.orchestrator import Orchestrator
-from models.result import AvailabilityResult
 
 
 @pytest.fixture

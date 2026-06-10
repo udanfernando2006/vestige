@@ -2,7 +2,6 @@ import asyncio
 import json
 from pipeline.llm_extractor import Extractor
 from playwright.async_api import async_playwright
-from cloud_config import cloud_config
 
 
 async def get_html(url):
@@ -31,7 +30,8 @@ async def get_html(url):
                 await page.wait_for_selector(
                     "main, .product-main, .product-info, .col-md-6", timeout=10000
                 )
-            except:
+            except Exception as e:
+                print(f"Error waiting for main content selectors: {e}")
                 pass  # If specific selectors aren't found, just proceed with what we have
 
             content = await page.content()

@@ -69,7 +69,6 @@ class TestPathC:
     async def test_path_c_updates_pair_status_to_in_stock(
         self, db_writer, db_session, seeded_pair_c, mock_browser_session
     ):
-        from db.models import TrackingPair
 
         result = AvailabilityResult(
             in_stock=True,
@@ -103,7 +102,6 @@ class TestPathC:
         When the Scraper returns reason='selector_not_found', the Orchestrator
         must clear the cached selectors and transition the pair to NEEDS_SETUP.
         """
-        from db.models import TrackingPair
 
         error_result = AvailabilityResult(
             in_stock=None,
