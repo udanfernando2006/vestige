@@ -121,7 +121,10 @@ class TestPathB:
         mock_result = _mock_subprocess_failure()
 
         with patch("subprocess.run", return_value=mock_result):
-            with patch("pipeline.orchestrator.BrowserSession", return_value=mock_browser_session):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
@@ -140,7 +143,10 @@ class TestPathB:
         orchestrator = Orchestrator(db_writer=db_writer)
 
         with patch("subprocess.run") as mock_sub:
-            with patch("pipeline.orchestrator.BrowserSession", return_value=mock_browser_session):
+            with patch(
+                "pipeline.orchestrator.BrowserSession",
+                return_value=mock_browser_session,
+            ):
                 await orchestrator.run_all()
 
         mock_sub.assert_not_called()
