@@ -112,7 +112,7 @@ class TestPathB:
         assert updated["status"] == "PENDING"
 
     async def test_path_b_failed_discovery_leaves_needs_setup(
-        self, db_writer, db_session, seeded_pair_b, monkeypatch
+        self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
     ):
         monkeypatch.setenv("LLM_MODE", "selector")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
@@ -121,13 +121,14 @@ class TestPathB:
         mock_result = _mock_subprocess_failure()
 
         with patch("subprocess.run", return_value=mock_result):
-            await orchestrator.run_pair(seeded_pair_b, path="B")
+            with patch("pipeline.orchestrator.BrowserSession", return_value=mock_browser_session):
+                await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
         assert updated["status"] == "NEEDS_SETUP"
 
     async def test_path_b_discovery_disabled_marks_needs_setup_without_subprocess(
-        self, db_writer, db_session, seeded_pair_b, monkeypatch
+        self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
     ):
         """
         When LLM_DISCOVERY_ENABLED=false, the Orchestrator should not invoke
@@ -139,8 +140,10 @@ class TestPathB:
         orchestrator = Orchestrator(db_writer=db_writer)
 
         with patch("subprocess.run") as mock_sub:
-            await orchestrator.run_pair(seeded_pair_b, path="B")
-            mock_sub.assert_not_called()
+            with patch("pipeline.orchestrator.BrowserSession", return_value=mock_browser_session):
+                await orchestrator.run_all()
+
+        mock_sub.assert_not_called()
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
         assert updated["status"] == "NEEDS_SETUP"
