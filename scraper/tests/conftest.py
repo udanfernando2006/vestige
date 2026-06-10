@@ -1,5 +1,6 @@
 import json
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -13,6 +14,8 @@ from sqlalchemy.orm import sessionmaker
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
+
+load_dotenv(Path(__file__).parent.parent.parent / ".env.test")
 
 def load_fixture(filename: str) -> str:
     """Return the text content of a fixture file."""
@@ -98,13 +101,23 @@ def db_session(db_engine):
     session = SessionFactory()
     try:
         yield session
+        session.commit()
     finally:
-        session.rollback()
         session.close()
+
+@pytest.fixture(autouse=True)
+def clean_db(db_engine):
+    """Truncate all tables after every test for a clean slate."""
+    yield
+    from db.models import Base
+    with db_engine.connect() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+        conn.commit()
 
 
 @pytest.fixture(scope="function")
-def db_writer(db_session):
+def db_writer(db_engine):
     """
     A DBWriter instance wired to the test session.
     Adjust the constructor call to match your DBWriter signature.
@@ -115,9 +128,7 @@ def db_writer(db_session):
             writer = DBWriter()
     """
     from db.writer import DBWriter
-
-    writer = DBWriter(session=db_session)
-    return writer
+    return DBWriter(db_engine)
 
 
 # ---------------------------------------------------------------------------
