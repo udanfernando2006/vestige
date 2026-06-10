@@ -1,0 +1,7 @@
+{
+    "price_selector": "div[class*='price'] span",
+    "stock_selector": "div[class*='availability'] span",
+    "price_sample": "LKR 1,500.00",
+    "stock_sample": "In Stock",
+    "model_used": "anthropic/claude-haiku-4-5"
+}

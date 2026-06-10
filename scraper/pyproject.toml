@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+asyncio_mode   = "auto"          # all async test functions run without @pytest.mark.asyncio
+testpaths      = ["tests"]
+pythonpath     = ["."]           # adds scraper/ to sys.path — matches the import root
+                                 # documented in vestige_guide.md §16
+addopts        = "-v --tb=short"
+
+[tool.pytest.ini_options.markers]
+unit        = "Fast, no I/O"
+integration = "Requires a live PostgreSQL instance"
+e2e         = "Full orchestrator run; browser and LLM are mocked"
