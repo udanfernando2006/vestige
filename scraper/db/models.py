@@ -2,7 +2,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, String, ForeignKey, Numeric, DateTime, UniqueConstraint, Index
+from sqlalchemy import (
+    BigInteger,
+    String,
+    ForeignKey,
+    Numeric,
+    DateTime,
+    UniqueConstraint,
+    Index,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -28,7 +36,9 @@ class Book(Base):
     is_series_entry: Mapped[bool] = mapped_column(default=False)
 
     # Optional foreign key
-    series_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("series.id"))
+    series_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("series.id")
+    )
 
     series: Mapped[Optional["Series"]] = relationship(back_populates="books")
     tracking_pairs: Mapped[List["TrackingPair"]] = relationship(back_populates="book")
