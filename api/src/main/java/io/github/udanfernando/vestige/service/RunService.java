@@ -97,9 +97,17 @@ public class RunService {
             throw new SelectorDiscoveryException("Discovery failed", stdout);
         }
 
-        DiscoverResultDto result = objectMapper.readValue(stdout, DiscoverResultDto.class);
-        result.setPairId(pairId);
-        return result;
+        DiscoverToolOutput parsed = objectMapper.readValue(stdout, DiscoverToolOutput.class);
+        return DiscoverResultDto.builder()
+                .pairId(pairId)
+                .priceSelector(parsed.getPriceSelector())
+                .stockSelector(parsed.getStockSelector())
+                .priceSample(parsed.getPriceSample())
+                .stockSample(parsed.getStockSample())
+                .modelUsed(parsed.getModelUsed())
+                .reason(parsed.getReason())
+                .committed(parsed.isCommitted())
+                .build();
     }
 
     private String str(Object o) { return o != null ? o.toString() : null; }
