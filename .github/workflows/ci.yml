@@ -7,16 +7,13 @@ on:
         branches: [main]
 
 jobs:
-    # -------------------------------------------------------------------------
-    # Python — unit + integration + E2E
-    # -------------------------------------------------------------------------
     python:
         name: Python tests
         runs-on: ubuntu-latest
 
         services:
             postgres:
-                image: postgres:16
+                image: postgres:18
                 env:
                     POSTGRES_USER: booktracker
                     POSTGRES_PASSWORD: testpassword
@@ -30,11 +27,9 @@ jobs:
                     --health-retries 5
 
         env:
-            # psycopg3 dialect prefix required by SQLAlchemy 2.x
             DATABASE_URL: postgresql+psycopg://booktracker:testpassword@localhost:5432/vestige_test
             POSTGRES_USER: booktracker
             POSTGRES_PASSWORD: testpassword
-            # LLM env vars — values are irrelevant because all LLM calls are mocked
             LLM_DISCOVERY_ENABLED: "false"
             LLM_MODE: direct
             LLM_ENGINE: cloud
@@ -42,12 +37,11 @@ jobs:
             LLM_MODEL: anthropic/claude-haiku-4-5
             OPENROUTER_API_KEY: test-key-not-used
             ANTHROPIC_API_KEY: test-key-not-used
-            # Logging
             LOG_DIR: /tmp/vestige-test-logs
 
         defaults:
             run:
-                working-directory: scraper # all pip/pytest commands run from scraper/
+                working-directory: scraper
 
         steps:
             - name: Checkout
@@ -61,9 +55,6 @@ jobs:
                   cache-dependency-path: scraper/requirements-dev.txt
 
             - name: Install dependencies
-              # Playwright browsers are NOT installed here — no test needs a real browser.
-              # If you later add browser-smoke tests in a separate job, add:
-              #   python -m playwright install chromium
               run: pip install -r requirements-dev.txt
 
             - name: Audit Python dependencies for known vulnerabilities
@@ -77,3 +68,47 @@ jobs:
 
             - name: Run tests
               run: pytest tests/
+
+    java:
+        name: Java tests
+        runs-on: ubuntu-latest
+
+        services:
+            postgres:
+                image: postgres:18
+                env:
+                    POSTGRES_USER: booktracker
+                    POSTGRES_PASSWORD: testpassword
+                    POSTGRES_DB: vestige_test
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        env:
+            POSTGRES_USER: booktracker
+            POSTGRES_PASSWORD: testpassword
+
+        defaults:
+            run:
+                working-directory: api
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up JDK 25
+              uses: actions/setup-java@v4
+              with:
+                  distribution: temurin
+                  java-version: "25"
+                  cache: maven
+
+            - name: Make mvnw executable
+              run: chmod +x mvnw
+
+            - name: Run tests
+              run: ./mvnw test
