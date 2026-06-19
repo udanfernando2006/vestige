@@ -29,7 +29,7 @@ services:
             # Remove this in production — only the api and scraper containers need access.
             - "5432:5432"
         volumes:
-            - postgres_data:/var/lib/postgresql/data
+            - postgres_data:/var/lib/postgresql
         healthcheck:
             # depends_on with condition: service_healthy waits for this to pass before
             # starting api or scraper, preventing connection errors on fresh boot.
