@@ -1,51 +1,100 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect, useState, useCallback } from "react";
+import Dashboard from "./pages/Dashboard";
+import Books from "./pages/Books";
+import Stores from "./pages/Stores";
+import Tracking from "./pages/Tracking";
+import History from "./pages/History";
+import Settings from "./pages/Settings";
+import { checkHealth } from "./api/client";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type Page =
+    | "dashboard"
+    | "books"
+    | "stores"
+    | "tracking"
+    | "history"
+    | "settings";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+const NAV: { id: Page; label: string }[] = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "books", label: "Books" },
+    { id: "stores", label: "Stores" },
+    { id: "tracking", label: "Tracking" },
+    { id: "history", label: "History" },
+    { id: "settings", label: "Settings" },
+];
 
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+export default function App() {
+    const [page, setPage] = useState<Page>("dashboard");
+    const [backendStatus, setBackendStatus] = useState<
+        "checking" | "ready" | "unreachable"
+    >("checking");
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+    const probe = useCallback(async () => {
+        setBackendStatus("checking");
+        for (let attempt = 0; attempt < 10; attempt++) {
+            try {
+                await checkHealth();
+                setBackendStatus("ready");
+                return;
+            } catch {
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+        }
+        setBackendStatus("unreachable");
+    }, []);
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+    useEffect(() => {
+        probe();
+    }, [probe]);
+
+    // Settings must always be reachable, even before the backend is up or if the
+    // configured URL is wrong — otherwise there's no way to fix it from the UI.
+    if (backendStatus !== "ready" && page !== "settings") {
+        return (
+            <div className="backend-gate">
+                <h1>Vestige</h1>
+                {backendStatus === "checking" && <p>Connecting to the API…</p>}
+                {backendStatus === "unreachable" && (
+                    <>
+                        <p>
+                            Couldn't reach the Spring Boot API. Make sure{" "}
+                            <code>docker-compose up</code> (or the API jar) is
+                            running.
+                        </p>
+                        <button onClick={probe}>Retry</button>
+                    </>
+                )}
+                <button
+                    className="link-button"
+                    onClick={() => setPage("settings")}>
+                    Open Settings
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="app-shell">
+            <nav className="sidebar">
+                <h1>Vestige</h1>
+                {NAV.map((n) => (
+                    <button
+                        key={n.id}
+                        className={n.id === page ? "nav-active" : ""}
+                        onClick={() => setPage(n.id)}>
+                        {n.label}
+                    </button>
+                ))}
+            </nav>
+            <main className="main-content">
+                {page === "dashboard" && <Dashboard />}
+                {page === "books" && <Books />}
+                {page === "stores" && <Stores />}
+                {page === "tracking" && <Tracking />}
+                {page === "history" && <History />}
+                {page === "settings" && <Settings />}
+            </main>
+        </div>
+    );
 }
-
-export default App;
