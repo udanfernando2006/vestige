@@ -41,9 +41,6 @@ WORKDIR /app
 # regardless of which user the container runs as.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Copy all installed Python packages from the deps stage.
-# This includes the `playwright` CLI script at /usr/local/bin/playwright.
-COPY --from=deps /install /usr/local
 
 # Install Chromium and every system-level library it depends on.
 # --with-deps tells Playwright to run apt-get itself and install the full
@@ -51,6 +48,10 @@ COPY --from=deps /install /usr/local
 # This is the canonical Playwright-in-Docker approach — do not list the
 # individual libraries manually; the set changes between browser versions.
 RUN playwright install --with-deps chromium
+
+# Copy all installed Python packages from the deps stage.
+# This includes the `playwright` CLI script at /usr/local/bin/playwright.
+COPY --from=deps /install /usr/local
 
 # Copy application source last.
 # Placing source after all dependency and browser-install layers means Docker's
