@@ -43,7 +43,7 @@ RUN ./mvnw package -DskipTests --no-transfer-progress -B
 # Once eclipse-temurin:25-jre is confirmed published, replace the FROM line
 # below with: FROM eclipse-temurin:25-jre
 # ─────────────────────────────────────────────────────────────────────────────
-FROM eclipse-temurin:25-jdk
+FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 
@@ -59,4 +59,4 @@ EXPOSE 8080
 # Leave empty by default — Spring Boot 4.x on JDK 25 tunes itself reasonably.
 ENV JAVA_OPTS=""
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

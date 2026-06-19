@@ -9,9 +9,7 @@
 # Usage:
 #   docker-compose up                       start postgres + api
 #   docker-compose run scraper              run one scrape cycle manually
-#   docker-compose run scraper python \
-#     scraper/tools/discover_selectors.py \
-#     --pair-id 3 --commit                  run selector discovery for a pair
+#   docker-compose run scraper python tools/discover_selectors.py --pair-id 3 --commit                 run selector discovery for a pair
 #   docker-compose down                     stop everything
 #
 # All secrets come from the .env file in the project root.
