@@ -42,6 +42,7 @@ services:
 
     # ── Spring Boot API ─────────────────────────────────────────────────────────
     api:
+        image: ghcr.io/udanfernando2006/vestige-api:latest
         build:
             context: ./api
             cache_from:
@@ -82,6 +83,7 @@ services:
     # Run it on demand: docker-compose run scraper
     # Schedule it externally: cron / systemd timer calls docker-compose run scraper
     scraper:
+        image: ghcr.io/udanfernando2006/vestige-scraper:latest
         build:
             context: ./scraper
             cache_from:
