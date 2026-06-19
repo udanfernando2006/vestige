@@ -1,0 +1,66 @@
+# .github/workflows/docker-compose-smoke-test.yml
+name: Docker Compose Smoke Test
+
+on:
+    workflow_dispatch: # run manually from the Actions tab whenever you want
+    push:
+        paths: # only fires on changes that could break the build
+            - "api/**"
+            - "scraper/**"
+            - "docker-compose.yml"
+            - ".github/workflows/docker-compose-smoke-test.yml"
+
+jobs:
+    compose-smoke-test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Create .env for compose
+              run: |
+                  cat <<EOF > .env
+                  POSTGRES_USER=booktracker
+                  POSTGRES_PASSWORD=testpassword
+                  EOF
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build images
+              run: docker compose build
+
+            - name: Start postgres + api
+              env:
+                  # First-run override: real Postgres schema doesn't exist yet in CI,
+                  # so validate-mode Hibernate would crash on startup. Never set this
+                  # in production — it's only safe here because the DB is thrown away
+                  # at the end of the job.
+                  POSTGRES_USER: booktracker
+                  POSTGRES_PASSWORD: testpassword
+                  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+              run: docker compose up -d postgres api
+
+            - name: Dump Docker logs on failure
+              if: failure()
+              run: docker compose logs
+
+            - name: Wait for API health
+              run: |
+                  for i in $(seq 1 30); do
+                    if curl -fs http://localhost:8080/actuator/health; then
+                      echo "API is healthy"
+                      exit 0
+                    fi
+                    sleep 2
+                  done
+                  echo "API never became healthy"
+                  docker compose logs api
+                  exit 1
+
+            - name: Smoke-test scraper image
+              run: docker compose run --rm scraper python -c "import playwright; print('scraper image OK')"
+
+            - name: Tear down
+              if: always()
+              run: docker compose down -v

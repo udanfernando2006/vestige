@@ -2,7 +2,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import String, ForeignKey, Numeric, DateTime, UniqueConstraint, Index
+from sqlalchemy import (
+    BigInteger,
+    String,
+    ForeignKey,
+    Numeric,
+    DateTime,
+    UniqueConstraint,
+    Index,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -13,7 +21,7 @@ class Base(DeclarativeBase):
 class Series(Base):
     __tablename__ = "series"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
 
     books: Mapped[List["Book"]] = relationship(back_populates="series")
@@ -22,13 +30,15 @@ class Series(Base):
 class Book(Base):
     __tablename__ = "books"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str]
     isbn: Mapped[str] = mapped_column(String, unique=True)
     is_series_entry: Mapped[bool] = mapped_column(default=False)
 
     # Optional foreign key
-    series_id: Mapped[Optional[int]] = mapped_column(ForeignKey("series.id"))
+    series_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("series.id")
+    )
 
     series: Mapped[Optional["Series"]] = relationship(back_populates="books")
     tracking_pairs: Mapped[List["TrackingPair"]] = relationship(back_populates="book")
@@ -37,7 +47,7 @@ class Book(Base):
 class Store(Base):
     __tablename__ = "stores"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
     base_url: Mapped[str]
     search_url_template: Mapped[Optional[str]]
@@ -48,9 +58,9 @@ class Store(Base):
 class TrackingPair(Base):
     __tablename__ = "tracking_pairs"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    book_id: Mapped[int] = mapped_column(ForeignKey("books.id"))
-    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    book_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("books.id"))
+    store_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("stores.id"))
     product_url: Mapped[Optional[str]]
     price_selector: Mapped[Optional[str]]
     stock_selector: Mapped[Optional[str]]
@@ -69,8 +79,8 @@ class TrackingPair(Base):
 class AvailabilitySnapshot(Base):
     __tablename__ = "availability_snapshots"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    pair_id: Mapped[int] = mapped_column(ForeignKey("tracking_pairs.id"))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    pair_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tracking_pairs.id"))
     in_stock: Mapped[Optional[bool]]
     price: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     status: Mapped[str]
