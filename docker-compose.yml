@@ -67,6 +67,7 @@ services:
             PIPELINE_CMD: ${PIPELINE_CMD:-python scraper/main.py}
             DISCOVER_CMD: ${DISCOVER_CMD:-python scraper/tools/discover_selectors.py}
             PYTHONIOENCODING: utf-8
+            SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
         volumes:
             # Mount the logs directory so the API can serve run history from the same
             # files that the scraper writes to.
