@@ -37,7 +37,7 @@ jobs:
                   # in production — it's only safe here because the DB is thrown away
                   # at the end of the job.
                   POSTGRES_USER: booktracker
-                  POSTGRES_PASSWORD: password123
+                  POSTGRES_PASSWORD: testpassword
                   SPRING_JPA_HIBERNATE_DDL_AUTO: update
               run: docker compose up -d postgres api
 
