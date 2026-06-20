@@ -1,13 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Vestige — docker-compose.yml
 #
-# Three services:
-#   postgres  — always starts; shared by API and scraper
-#   api       — always starts; serves the Spring Boot REST layer on port 8080
-#   scraper   — manual only (profile: manual); one-shot pipeline container
+# Four services:
+#   postgres        — always starts; shared by API and scraper
+#   api             — always starts; serves the Spring Boot REST layer on port 8080
+#   scraper-server  — always starts; long-running HTTP service the API calls for
+#                     "Run Now" (/run) and "Discover" (/discover/{id}) from the UI
+#   scraper         — manual only (profile: manual); one-shot pipeline container,
+#                     same image as scraper-server, used by cron/systemd scheduling
 #
 # Usage:
-#   docker-compose up                       start postgres + api
+#   docker-compose up                       start postgres + api + scraper-server
 #   docker-compose run scraper              run one scrape cycle manually
 #   docker-compose run scraper python tools/discover_selectors.py --pair-id 3 --commit                 run selector discovery for a pair
 #   docker-compose down                     stop everything
@@ -60,13 +63,11 @@ services:
             DB_HOST: postgres
             # Shared log directory — the API reads run summaries that the scraper writes here.
             LOG_DIR: /app/logs
-            # Command used by POST /api/runs/trigger to invoke the pipeline.
-            # In Docker this doesn't work out of the box (Spring Boot cannot exec into the
-            # scraper container as a subprocess). For development, run Spring Boot directly
-            # on the host (not in Docker) so ProcessBuilder can reach the Python venv, OR
-            # trigger scraper runs manually with: docker-compose run scraper
-            PIPELINE_CMD: ${PIPELINE_CMD:-python scraper/main.py}
-            DISCOVER_CMD: ${DISCOVER_CMD:-python scraper/tools/discover_selectors.py}
+            # scraper-server is the always-on HTTP service /api/runs/trigger and
+            # /api/runs/discover/{id} call. Calling "python" directly never worked from
+            # inside this container — there's no Python runtime in the api image, and
+            # the scraper source isn't present here either.
+            SCRAPER_URL: http://scraper-server:8000
             PYTHONIOENCODING: utf-8
             SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
         volumes:
@@ -76,12 +77,78 @@ services:
         depends_on:
             postgres:
                 condition: service_healthy
+            scraper-server:
+                condition: service_healthy
         restart: unless-stopped
 
-    # ── Python scraper pipeline ─────────────────────────────────────────────────
+    # ── Python scraper — always-on HTTP service ─────────────────────────────────
+    # Same image as `scraper` below, just started in --serve mode. This is what
+    # makes "Run Now" and "Discover" work from the UI. Must NOT have profiles: manual
+    # — it needs to be running whenever api is, so api can reach it over the network.
+    scraper-server:
+        image: ghcr.io/udanfernando2006/vestige-scraper:latest
+        build:
+            context: ./scraper
+            cache_from:
+                - type=gha,scope=scraper
+            cache_to:
+                - type=gha,mode=max,scope=scraper
+        command: ["python", "main.py", "--serve"]
+        environment:
+            # Database
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/vestige
+
+            # LLM configuration — same as the one-shot scraper job below; the
+            # /discover/{id} endpoint needs these to run discover_selectors.py
+            LLM_DISCOVERY_ENABLED: ${LLM_DISCOVERY_ENABLED:-false}
+            LLM_MODE: ${LLM_MODE:-direct}
+            LLM_ENGINE: ${LLM_ENGINE:-cloud}
+            LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+            LLM_MODEL: ${LLM_MODEL:-anthropic/claude-haiku-4-5}
+            OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+            ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+            # host.docker.internal resolves to the host machine from inside a container —
+            # used when Ollama is running on the host rather than in another container.
+            OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+            # Email notifications — a UI-triggered run can change status just like a
+            # scheduled one, so this needs the same notification config.
+            SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+            SMTP_USER: ${SMTP_USER:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+            NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
+
+            LOG_DIR: /app/logs
+            PYTHONIOENCODING: utf-8
+            BOOKS_CONFIG_PATH: /app/books_config.json
+        volumes:
+            - ./logs:/app/logs
+            - ./books_config.json:/app/books_config.json:ro
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 15s
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: unless-stopped
+
+    # ── Python scraper pipeline — one-shot job ──────────────────────────────────
     # profile: manual means this container does NOT start with `docker-compose up`.
     # Run it on demand: docker-compose run scraper
     # Schedule it externally: cron / systemd timer calls docker-compose run scraper
+    # Same image as scraper-server above, just without --serve — this one runs once
+    # and exits, unchanged from before.
     scraper:
         image: ghcr.io/udanfernando2006/vestige-scraper:latest
         build:
