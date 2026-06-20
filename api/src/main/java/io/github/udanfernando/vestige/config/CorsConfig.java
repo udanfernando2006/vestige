@@ -16,11 +16,21 @@ public class CorsConfig {
             public void addCorsMappings(@NonNull CorsRegistry registry) {
                 registry.addMapping("/api/**")
                         .allowedOriginPatterns(
-                                "http://localhost:*",     // Vite dev server (port 1420)
+                                "http://localhost:*",      // Vite dev server (port 1420)
                                 "http://tauri.localhost",  // production app origin on Windows
                                 "tauri://localhost"        // production app origin on macOS/Linux
                         )
                         .allowedMethods("GET", "POST", "PATCH", "DELETE", "OPTIONS")
+                        .allowedHeaders("*");
+
+                // NEW mapping specifically for the health check (Actuator)
+                registry.addMapping("/actuator/**")
+                        .allowedOriginPatterns(
+                                "http://localhost:*",
+                                "http://tauri.localhost",
+                                "tauri://localhost"
+                        )
+                        .allowedMethods("GET")
                         .allowedHeaders("*");
             }
         };
