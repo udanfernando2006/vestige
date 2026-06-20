@@ -38,7 +38,6 @@ SAMPLE_CONFIG = {
 
 
 class TestSyncConfig:
-
     def test_seeds_books(self, db_writer, db_session):
         from db.models import Book
 

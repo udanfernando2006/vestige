@@ -63,7 +63,6 @@ def _mock_subprocess_failure() -> MagicMock:
 
 
 class TestPathB:
-
     async def test_path_b_successful_discovery_transitions_to_pending(
         self, db_writer, db_session, seeded_pair_b, monkeypatch, mock_browser_session
     ):

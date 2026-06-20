@@ -26,7 +26,6 @@ def seeded_pair_d(db_session, db_writer):
 
 
 class TestPathD:
-
     async def test_path_d_writes_snapshot_with_llm_direct_source(
         self,
         db_writer,

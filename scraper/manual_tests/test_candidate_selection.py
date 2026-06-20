@@ -19,7 +19,7 @@ async def test_candidate_selection():
     book_title = "The Last Wish"
 
     for base_url, store_name in stores:
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"STORE: {store_name.upper()}")
         print("=" * 70)
 

@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 
 
 class Crawler:
-
     def __init__(self, headless: bool = True, timeout: int = 60000):
         self._headless = headless
         self.timeout = timeout

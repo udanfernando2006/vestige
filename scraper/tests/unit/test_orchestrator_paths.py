@@ -32,7 +32,6 @@ def _pair(
 
 
 class TestPathA:
-
     def test_no_url_selector_mode_disabled(self, orchestrator, monkeypatch):
         monkeypatch.setenv("LLM_MODE", "selector")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "false")
@@ -61,7 +60,6 @@ class TestPathA:
 
 
 class TestPathC:
-
     def test_url_and_both_selectors(self, orchestrator, monkeypatch):
         monkeypatch.setenv("LLM_MODE", "selector")
         pair = _pair(
@@ -108,7 +106,6 @@ class TestPathC:
 
 
 class TestPathD:
-
     def test_url_no_selectors_direct_mode(self, orchestrator, monkeypatch):
         monkeypatch.setenv("LLM_MODE", "direct")
         pair = _pair(product_url="https://sarasavi.lk/books/123")
@@ -130,7 +127,6 @@ class TestPathD:
 
 
 class TestPathB:
-
     def test_url_no_selectors_selector_mode_enabled(self, orchestrator, monkeypatch):
         monkeypatch.setenv("LLM_MODE", "selector")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
@@ -144,7 +140,6 @@ class TestPathB:
 
 
 class TestNeedsSetup:
-
     def test_url_no_selectors_selector_mode_disabled(self, orchestrator, monkeypatch):
         monkeypatch.setenv("LLM_MODE", "selector")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "false")

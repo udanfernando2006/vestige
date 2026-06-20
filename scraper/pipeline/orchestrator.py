@@ -14,7 +14,6 @@ from db.writer import DBWriter
 
 
 class Orchestrator:
-
     def __init__(self, db_writer: DBWriter):
         self.db_writer = db_writer
 

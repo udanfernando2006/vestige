@@ -68,7 +68,6 @@ def _result(status="IN_STOCK", price=1500.00, in_stock=True, source="scraper"):
 
 
 class TestGetActivePairs:
-
     def test_returns_pending_pairs(self, db_writer, db_session):
         store = seed_store(db_session)
         book = seed_book(db_session)
@@ -107,7 +106,6 @@ class TestGetActivePairs:
 
 
 class TestSnapshotRoundTrip:
-
     def test_write_and_retrieve(self, db_writer, db_session):
         store = seed_store(db_session, name="snap_store", base_url="https://snap.lk")
         book = seed_book(db_session, name="Snap Book", isbn="9990000000010")
@@ -171,7 +169,6 @@ class TestSnapshotRoundTrip:
 
 
 class TestSelectorManagement:
-
     def test_update_selectors_transitions_needs_setup_to_pending(
         self, db_writer, db_session
     ):
@@ -222,7 +219,6 @@ class TestSelectorManagement:
 
 
 class TestStoreSearchTemplate:
-
     def test_caches_search_url_template(self, db_writer, db_session):
         store = seed_store(db_session, name="tpl_store", base_url="https://tpl.lk")
         template = "https://tpl.lk/?s=test"

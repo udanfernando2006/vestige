@@ -16,7 +16,6 @@ def log_dir(tmp_path):
 
 
 class TestBuildLogPath:
-
     def test_path_structure(self, log_dir):
         run_id = "2026-05-16T08:00:00Z"
         path = local_logger.build_log_path(run_id, log_dir=log_dir)
@@ -54,7 +53,6 @@ SAMPLE_RUN = {
 
 
 class TestWriteRunLog:
-
     def test_creates_file(self, log_dir):
         local_logger.write_run_log(SAMPLE_RUN, log_dir=log_dir)
         log_path = local_logger.build_log_path(SAMPLE_RUN["run_id"], log_dir=log_dir)

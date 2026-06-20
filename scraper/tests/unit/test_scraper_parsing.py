@@ -13,7 +13,6 @@ def scraper():
 
 
 class TestParsePrice:
-
     def test_lkr_with_comma_formatting(self, scraper):
         assert scraper.parse_price("LKR 1,500.00") == 1500.00
 
@@ -67,7 +66,6 @@ class TestParsePrice:
 
 
 class TestParseStockStatus:
-
     # --- in-stock signals ---
 
     def test_in_stock(self, scraper):

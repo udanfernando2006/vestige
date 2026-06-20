@@ -14,7 +14,7 @@ async def test_discover_search_endpoints():
     title = "The Last Wish"
 
     for base_url in stores:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Testing: {base_url}")
         print("=" * 60)
 
