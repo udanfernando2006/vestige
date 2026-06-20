@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import sys
+import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -28,6 +29,7 @@ _orchestrator = Orchestrator(_db)
 # Prevents two overlapping runs if "Run Now" is clicked twice in a row.
 _run_lock = asyncio.Lock()
 
+logger = logging.getLogger("uvicorn.error")
 
 @app.get("/health")
 async def health():
@@ -43,6 +45,7 @@ async def run_pipeline():
             await run_once(_db, _orchestrator)
             return {"status": "success"}
         except Exception as e:
+            logger.exception("Pipeline run failed")
             raise HTTPException(status_code=500, detail=str(e))
 
 
