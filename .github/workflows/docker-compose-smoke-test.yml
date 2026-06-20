@@ -28,7 +28,7 @@ jobs:
               uses: docker/setup-buildx-action@v3
 
             - name: Build images
-                env:
+              env:
                   COMPOSE_PROFILES: manual
               run: docker compose build
 
