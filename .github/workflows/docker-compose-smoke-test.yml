@@ -32,7 +32,7 @@ jobs:
                   COMPOSE_PROFILES: manual
               run: docker compose build
 
-            - name: Start postgres + api
+            - name: Start postgres + api (+ scraper-server via depends_on)
               env:
                   # First-run override: real Postgres schema doesn't exist yet in CI,
                   # so validate-mode Hibernate would crash on startup. Never set this
@@ -41,7 +41,10 @@ jobs:
                   POSTGRES_USER: booktracker
                   POSTGRES_PASSWORD: testpassword
                   SPRING_JPA_HIBERNATE_DDL_AUTO: update
-              run: docker compose up -d postgres api
+              # scraper-server has no profile and api now depends_on it with
+              # condition: service_healthy, so `up` starts and waits on it
+              # automatically even if it's not named here. Listed explicitly anyway.
+              run: docker compose up -d postgres api scraper-server
 
             - name: Dump Docker logs on failure
               if: failure()
@@ -60,8 +63,22 @@ jobs:
                   docker compose logs api
                   exit 1
 
+            - name: Verify scraper-server is reachable from another container
+              # This is the specific thing that was broken before the webhook fix.
+              # scraper-server's own healthcheck only proves it can talk to itself
+              # via localhost — this proves a *different* container can resolve it
+              # by service name and reach it over the compose network, the same way
+              # the api container does. Uses the `scraper` service as a throwaway
+              # client since it shares the same image and network.
+              run: |
+                  docker compose run --rm scraper python -c "
+                  import urllib.request
+                  urllib.request.urlopen('http://scraper-server:8000/health')
+                  print('scraper-server reachable from another container: OK')
+                  "
+
             - name: Smoke-test scraper image
-              run: docker compose run --rm scraper python -c "import playwright; print('scraper image OK')"
+              run: docker compose run --rm scraper python -c "import playwright, fastapi, uvicorn; print('scraper image OK')"
 
             - name: Tear down
               if: always()
