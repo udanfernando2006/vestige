@@ -31,6 +31,7 @@ _run_lock = asyncio.Lock()
 
 logger = logging.getLogger("uvicorn.error")
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -71,7 +72,6 @@ async def discover(pair_id: int):
             status_code=422, content={"output": stdout_text or stderr_text}
         )
 
-    
     # discover_selectors.py prints progress lines ("Resolving target URL...",
     # "Calling LLM...", "Validating selectors...") before its final JSON result —
     # useful when run interactively, but it means stdout isn't pure JSON. Pull out
@@ -79,10 +79,16 @@ async def discover(pair_id: int):
     json_start = stdout_text.find("{")
     if json_start == -1:
         logger.error("discover_selectors.py produced no JSON output:\n%s", stdout_text)
-        raise HTTPException(status_code=500, detail="No JSON found in discover_selectors.py output")
+        raise HTTPException(
+            status_code=500, detail="No JSON found in discover_selectors.py output"
+        )
 
     try:
         return json.loads(stdout_text[json_start:])
     except json.JSONDecodeError:
-        logger.exception("Failed to parse discover_selectors.py output:\n%s", stdout_text)
-        raise HTTPException(status_code=500, detail="Invalid JSON from discover_selectors.py")
+        logger.exception(
+            "Failed to parse discover_selectors.py output:\n%s", stdout_text
+        )
+        raise HTTPException(
+            status_code=500, detail="Invalid JSON from discover_selectors.py"
+        )
