@@ -216,8 +216,8 @@ class Orchestrator:
         print(f"Path A completed. Routing to Path {next_path}")
 
         if next_path == "B":
-            return await self.run_pair_path_b(pair, session)
-        return await self.run_pair_path_d(pair, session)
+            return await self._run_pair_path_b(pair, session)
+        return await self._run_pair_path_d(pair, session)
 
     async def _run_pair_path_b(
         self, pair: TrackingPair, session: BrowserSession
