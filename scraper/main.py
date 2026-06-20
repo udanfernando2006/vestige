@@ -20,7 +20,7 @@ async def main():
     orchestrator = Orchestrator(db)
 
     config_path = os.environ.get("BOOKS_CONFIG_PATH", "books_config.json")
-    if os.path.exists(config_path):
+    if os.path.isfile(config_path):
         with open(config_path) as f:
             db.sync_config(json.load(f))
 
