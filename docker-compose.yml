@@ -117,6 +117,10 @@ services:
             # Log directory inside the container — matches the volume mount below
             LOG_DIR: /app/logs
             PYTHONIOENCODING: utf-8
+
+            # Books configuration
+            BOOKS_CONFIG_PATH: /app/books_config.json
+
         volumes:
             # Bind-mount the host logs/ directory so:
             #   - Scraper writes logs to the host filesystem (survives container restarts)
@@ -124,8 +128,6 @@ services:
             #   - You can inspect logs directly on the host without exec-ing into a container
             - ./logs:/app/logs
             - ./books_config.json:/app/books_config.json:ro
-        environment:
-            BOOKS_CONFIG_PATH: /app/books_config.json
         depends_on:
             postgres:
                 condition: service_healthy
