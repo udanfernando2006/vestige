@@ -19,8 +19,10 @@ async def main():
     db = DBWriter(engine)
     orchestrator = Orchestrator(db)
 
-    with open("D:\\Projects\\Vestige\\vestige\\books_config.json") as f:
-        db.sync_config(json.load(f))
+    config_path = os.environ.get("BOOKS_CONFIG_PATH", "books_config.json")
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            db.sync_config(json.load(f))
 
     summary = await orchestrator.run_all(db)
     write_run_log(summary)

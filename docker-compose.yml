@@ -123,6 +123,9 @@ services:
             #   - API container reads the same files via its own logs mount above
             #   - You can inspect logs directly on the host without exec-ing into a container
             - ./logs:/app/logs
+            - ./books_config.json:/app/books_config.json:ro
+        environment:
+            BOOKS_CONFIG_PATH: /app/books_config.json
         depends_on:
             postgres:
                 condition: service_healthy
