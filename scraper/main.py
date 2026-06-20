@@ -22,7 +22,7 @@ async def run_once(db: DBWriter, orchestrator: Orchestrator):
         with open(config_path) as f:
             db.sync_config(json.load(f))
 
-    summary = await orchestrator.run_all(db)
+    summary = await orchestrator.run_all()
     write_run_log(summary)
     return summary
 
