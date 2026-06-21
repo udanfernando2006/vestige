@@ -101,12 +101,18 @@ HTML Content:
 
 class Extractor:
     def __init__(self, config: dict):
-        self.engine = config.get("engine", "local")  # 'local' or 'cloud'
-        self.api_base = config.get("api_base", "http://localhost:11434/v1")
-        self.api_key = config.get("api_key", "ollama")
-        self.model_name = config.get("model_name", "qwen2.5-coder:3b")
-        self.provider = config.get("provider", "ollama")
+        self.engine = config.get("engine", "stripped")  # 'stripped' or 'full'
+        self.api_base = config.get("api_base")
+        self.api_key = config.get("api_key", "not-needed")
+        self.model_name = config.get("model_name")
 
+        if not self.api_base or not self.model_name:
+            raise ValueError(
+                "Extractor requires 'api_base' and 'model_name' — no default LLM "
+                "endpoint is assumed. Check that SELECTOR_API_BASE/SELECTOR_MODEL or "
+                "DIRECT_API_BASE/DIRECT_MODEL are set in your .env."
+            )
+        
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
     def clean_html(self, html: str) -> str:
@@ -163,7 +169,7 @@ class Extractor:
                 element.decompose()
 
         # 4. Engine-Specific Formatting Layer
-        if self.engine == "local":
+        if self.engine == "stripped":
             # Strip all attributes to avoid token weight inflation
             for tag in soup.find_all(True):
                 tag.attrs = {}
@@ -199,54 +205,57 @@ class Extractor:
             return raw_response
 
         return raw_response.get("selectors", {})
-
-    def _call_llm(self, user_content: str, system_prompt: str) -> dict:
+    
+    def _call_llm(self, user_content, system_prompt):
         try:
-            kwargs = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
-                "temperature": 0.0,
+            return self._attempt(user_content, system_prompt, json_mode=True)
+        except Exception:
+            try:
+                return self._attempt(user_content, system_prompt, json_mode=False)
+            except Exception as e:
+                return {"error": f"LLM Request Failure: {e}"}
+
+    def _attempt(self, user_content: str, system_prompt: str, json_mode) -> dict:
+        kwargs = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": 0.0,
+        }
+
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        response = self.client.chat.completions.create(**kwargs)
+
+        if not response or getattr(response, "choices", None) is None:
+            err_msg = "LLM endpoint returned a malformed response (no 'choices' field)."
+            if hasattr(response, "error") and response.error:
+                err_msg = f"LLM backend error: {response.error}"
+            return {"error": err_msg}
+
+        if len(response.choices) == 0:
+            return {"error": "LLM endpoint returned an empty choices array."}
+
+        resolved_model = getattr(response, "model", "Unknown Fallback Model")
+        print(f"[LLM] {self.model_name} -> resolved to: {resolved_model}")
+
+        raw_content = response.choices[0].message.content
+        if not raw_content:
+            return {
+                "error": "Model executed but returned an empty response string."
             }
 
-            if self.model_name != "openrouter/free":
-                kwargs["response_format"] = {"type": "json_object"}
+        raw_content = raw_content.strip()
 
-            response = self.client.chat.completions.create(**kwargs)
+        if raw_content.startswith("```"):
+            lines = raw_content.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].startswith("```"):
+                lines = lines[:-1]
+            raw_content = "\n".join(lines).strip()
 
-            if not response or getattr(response, "choices", None) is None:
-                err_msg = "OpenRouter routing constraint failure (choices field is missing/None)."
-                if hasattr(response, "error") and response.error:
-                    err_msg = f"OpenRouter Backend Error: {response.error}"
-                return {"error": err_msg}
-
-            if len(response.choices) == 0:
-                return {
-                    "error": "OpenRouter returned an empty choices selection array."
-                }
-
-            resolved_model = getattr(response, "model", "Unknown Fallback Model")
-            print(f"[LLM]{self.provider.upper()} resolved to: {resolved_model}")
-
-            raw_content = response.choices[0].message.content
-            if not raw_content:
-                return {
-                    "error": "Model executed but returned an empty response string."
-                }
-
-            raw_content = raw_content.strip()
-
-            if raw_content.startswith("```"):
-                lines = raw_content.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                raw_content = "\n".join(lines).strip()
-
-            return json.loads(raw_content)
-
-        except Exception as e:
-            return {"error": f"LLM Request Failure: {e}"}
+        return json.loads(raw_content)

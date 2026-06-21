@@ -229,7 +229,7 @@ async def _run(args) -> int:
 
     extractor = Extractor(
         {
-            "engine": "cloud",   # selector discovery always needs class/id — not configurable
+            "engine": "full",   # selector discovery always needs class/id — not configurable
             "api_base": api_base,
             "api_key": api_key,
             "model_name": model,
@@ -239,7 +239,7 @@ async def _run(args) -> int:
     cleaned_html = extractor.clean_html(raw_html)
 
     title_context = target["book_name"] or "unknown"
-    print(f"Calling LLM ({provider} / {model})...", file=sys.stderr)
+    print(f"Calling LLM ({model})...", file=sys.stderr)
     selectors = extractor.extract_selectors(cleaned_html, title_context)
 
     if "error" in selectors:

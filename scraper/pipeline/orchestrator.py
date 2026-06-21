@@ -301,10 +301,10 @@ class Orchestrator:
 
         extractor = Extractor(
             {
-                "engine": "local",   # direct extraction never needs class/id — always strip
-                "api_base": os.environ["DIRECT_API_BASE"],
+                "engine": "stripped",
+                "api_base": os.environ.get("DIRECT_API_BASE"),
                 "api_key": os.environ.get("DIRECT_API_KEY", ""),
-                "model_name": os.environ["DIRECT_MODEL"],
+                "model_name": os.environ.get("DIRECT_MODEL"),
             }
         )
         cleaned_html = extractor.clean_html(html)
