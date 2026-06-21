@@ -219,27 +219,20 @@ async def _run(args) -> int:
     print(f"Fetching HTML: {target['url']}", file=sys.stderr)
     raw_html = await fetch_html(target["url"])
 
-    provider = os.environ.get("LLM_PROVIDER", "openrouter")
-    model = os.environ.get("LLM_MODEL", "openrouter/free")
+    api_base = os.environ.get("SELECTOR_API_BASE")
+    api_key = os.environ.get("SELECTOR_API_KEY", "")
+    model = os.environ.get("SELECTOR_MODEL")
 
-    if provider == "ollama":
-        print(
-            "Warning: Local models are not reliable for selector discovery. "
-            "Set LLM_PROVIDER=openrouter or LLM_PROVIDER=anthropic.",
-            file=sys.stderr,
-        )
+    if not api_base or not model:
+        print("Error: SELECTOR_API_BASE and SELECTOR_MODEL must be set.", file=sys.stderr)
         return 1
-
-    api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
     extractor = Extractor(
         {
-            "engine": "cloud",
+            "engine": "cloud",   # selector discovery always needs class/id — not configurable
             "api_base": api_base,
             "api_key": api_key,
             "model_name": model,
-            "provider": provider,
         }
     )
 

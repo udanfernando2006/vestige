@@ -52,7 +52,6 @@ class Orchestrator:
                 last = self.db_writer.get_last_snapshot(pair["id"])
 
                 availability = result["result"]
-                availability.source = "llm_direct" if path == "D" else "scraper"
 
                 self.db_writer.write_snapshot(pair["id"], availability)
 
@@ -231,7 +230,6 @@ class Orchestrator:
             return {"pair_id": pair["id"], "status": "NEEDS_SETUP"}
 
         print(f"Path B: Running discover_selectors.py for Pair {pair['id']}")
-        capture_output = False  # Keep as False to see console log from discover_selectors.py in real-time which is more useful compared to the error log
         proc = subprocess.run(
             [
                 sys.executable,
@@ -240,18 +238,20 @@ class Orchestrator:
                 str(pair["id"]),
                 "--commit",
             ],
-            capture_output=capture_output,
+            capture_output=False,
             text=True,
             encoding="utf-8",
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
 
         if proc.returncode != 0:
-            print("Path B: Discovery failed.")
-            if capture_output:
-                print(proc.stderr)
-            self.db_writer.update_pair_status(pair["id"], "NEEDS_SETUP")
-            return {"pair_id": pair["id"], "status": "NEEDS_SETUP"}
+            print(f"Path B: Discovery/validation failed for Pair {pair['id']} — falling back to direct extraction this run.")
+            try:
+                return await self._run_pair_path_d(pair, session)
+            except Exception as e:
+                print(f"Path B: Direct-extraction fallback also failed for Pair {pair['id']}: {e}")
+                self.db_writer.update_pair_status(pair["id"], "NEEDS_SETUP")
+                return {"pair_id": pair["id"], "status": "NEEDS_SETUP"}
 
         # Selectors are now committed in DB — re-fetch to get them
         updated_pair = self.db_writer.get_pair(pair["id"])
@@ -270,7 +270,7 @@ class Orchestrator:
 
         if scrape_data.raw_stock_text is None and scrape_data.raw_price_text is None:
             raise Exception("selector_not_found")
-
+        scrape_data.source = "scraper"
         return {"pair_id": pair["id"], "status": "COMPLETED", "result": scrape_data}
 
     async def _run_pair_path_c(
@@ -289,7 +289,7 @@ class Orchestrator:
 
         if scrape_data.raw_stock_text is None and scrape_data.raw_price_text is None:
             raise Exception("selector_not_found")
-
+        scrape_data.source = "scraper"
         return {"pair_id": pair["id"], "status": "COMPLETED", "result": scrape_data}
 
     async def _run_pair_path_d(
@@ -301,8 +301,10 @@ class Orchestrator:
 
         extractor = Extractor(
             {
-                "model_name": os.environ.get("LLM_MODEL", "openrouter/free"),
-                "provider": os.environ.get("LLM_PROVIDER", "openrouter"),
+                "engine": "local",   # direct extraction never needs class/id — always strip
+                "api_base": os.environ["DIRECT_API_BASE"],
+                "api_key": os.environ.get("DIRECT_API_KEY", ""),
+                "model_name": os.environ["DIRECT_MODEL"],
             }
         )
         cleaned_html = extractor.clean_html(html)
@@ -328,6 +330,7 @@ class Orchestrator:
                 if parsed_stock
                 else ("OUT_OF_STOCK" if parsed_stock is False else "ERROR")
             ),
+            source="llm_direct",
         )
 
         return {
