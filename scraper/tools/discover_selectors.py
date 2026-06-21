@@ -213,10 +213,10 @@ async def _run(args) -> int:
     The Orchestrator checks this exit code when running as a subprocess.
     """
 
-    print("Resolving target URL...")
+    print("Resolving target URL...", file=sys.stderr)
     target = load_target(args.pair_id, args.url, args.store)
 
-    print(f"Fetching HTML: {target['url']}")
+    print(f"Fetching HTML: {target['url']}", file=sys.stderr)
     raw_html = await fetch_html(target["url"])
 
     provider = os.environ.get("LLM_PROVIDER", "openrouter")
@@ -246,7 +246,7 @@ async def _run(args) -> int:
     cleaned_html = extractor.clean_html(raw_html)
 
     title_context = target["book_name"] or "unknown"
-    print(f"Calling LLM ({provider} / {model})...")
+    print(f"Calling LLM ({provider} / {model})...", file=sys.stderr)
     selectors = extractor.extract_selectors(cleaned_html, title_context)
 
     if "error" in selectors:
@@ -271,7 +271,7 @@ async def _run(args) -> int:
             )
             return 1
 
-        print("Validating selectors against live page...")
+        print("Validating selectors against live page...", file=sys.stderr)
         validation = await validate_selectors(target["url"], price_sel, stock_sel)
 
         if not (validation.price_passed and validation.stock_passed):

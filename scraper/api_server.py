@@ -67,27 +67,24 @@ async def discover(pair_id: int):
     stdout_text = stdout.decode("utf-8", errors="replace").strip()
     stderr_text = stderr.decode("utf-8", errors="replace").strip()
 
+    # Progress messages go to stderr by design — stdout is reserved for the final
+    # JSON result only (see discover_selectors.py). Log the progress separately so
+    # it's actually visible in `docker compose logs scraper-server`: this call's
+    # own stdout/stderr are piped to us, not inherited by the container's console,
+    # so without this they'd otherwise be silently discarded on every success.
+    if stderr_text:
+        logger.info("discover_selectors.py (pair %s):\n%s", pair_id, stderr_text)
+
     if proc.returncode != 0:
         return JSONResponse(
             status_code=422, content={"output": stdout_text or stderr_text}
         )
 
-    # discover_selectors.py prints progress lines ("Resolving target URL...",
-    # "Calling LLM...", "Validating selectors...") before its final JSON result —
-    # useful when run interactively, but it means stdout isn't pure JSON. Pull out
-    # just the trailing JSON object.
-    json_start = stdout_text.find("{")
-    if json_start == -1:
-        logger.error("discover_selectors.py produced no JSON output:\n%s", stdout_text)
-        raise HTTPException(
-            status_code=500, detail="No JSON found in discover_selectors.py output"
-        )
-
     try:
-        return json.loads(stdout_text[json_start:])
+        return json.loads(stdout_text)
     except json.JSONDecodeError:
         logger.exception(
-            "Failed to parse discover_selectors.py output:\n%s", stdout_text
+            "Failed to parse discover_selectors.py stdout:\n%s", stdout_text
         )
         raise HTTPException(
             status_code=500, detail="Invalid JSON from discover_selectors.py"
