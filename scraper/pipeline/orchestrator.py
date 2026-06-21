@@ -245,11 +245,15 @@ class Orchestrator:
         )
 
         if proc.returncode != 0:
-            print(f"Path B: Discovery/validation failed for Pair {pair['id']} — falling back to direct extraction this run.")
+            print(
+                f"Path B: Discovery/validation failed for Pair {pair['id']} — falling back to direct extraction this run."
+            )
             try:
                 return await self._run_pair_path_d(pair, session)
             except Exception as e:
-                print(f"Path B: Direct-extraction fallback also failed for Pair {pair['id']}: {e}")
+                print(
+                    f"Path B: Direct-extraction fallback also failed for Pair {pair['id']}: {e}"
+                )
                 self.db_writer.update_pair_status(pair["id"], "NEEDS_SETUP")
                 return {"pair_id": pair["id"], "status": "NEEDS_SETUP"}
 

@@ -224,12 +224,14 @@ async def _run(args) -> int:
     model = os.environ.get("SELECTOR_MODEL")
 
     if not api_base or not model:
-        print("Error: SELECTOR_API_BASE and SELECTOR_MODEL must be set.", file=sys.stderr)
+        print(
+            "Error: SELECTOR_API_BASE and SELECTOR_MODEL must be set.", file=sys.stderr
+        )
         return 1
 
     extractor = Extractor(
         {
-            "engine": "full",   # selector discovery always needs class/id — not configurable
+            "engine": "full",  # selector discovery always needs class/id — not configurable
             "api_base": api_base,
             "api_key": api_key,
             "model_name": model,

@@ -112,7 +112,7 @@ class Extractor:
                 "endpoint is assumed. Check that SELECTOR_API_BASE/SELECTOR_MODEL or "
                 "DIRECT_API_BASE/DIRECT_MODEL are set in your .env."
             )
-        
+
         self.client = OpenAI(base_url=self.api_base, api_key=self.api_key)
 
     def clean_html(self, html: str) -> str:
@@ -205,7 +205,7 @@ class Extractor:
             return raw_response
 
         return raw_response.get("selectors", {})
-    
+
     def _call_llm(self, user_content, system_prompt):
         try:
             return self._attempt(user_content, system_prompt, json_mode=True)
@@ -244,9 +244,7 @@ class Extractor:
 
         raw_content = response.choices[0].message.content
         if not raw_content:
-            return {
-                "error": "Model executed but returned an empty response string."
-            }
+            return {"error": "Model executed but returned an empty response string."}
 
         raw_content = raw_content.strip()
 
