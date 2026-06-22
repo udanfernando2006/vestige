@@ -37,7 +37,7 @@ class DBWriter:
 
     def __init__(self, engine, cipher: "SettingsCipher | None" = None):
         self.Session = sessionmaker(bind=engine)
-        self.cipher = cipher
+        self._cipher = cipher
 
     # =========================================================================
     # SECURITY
