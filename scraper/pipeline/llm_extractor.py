@@ -103,7 +103,7 @@ class Extractor:
     def __init__(self, config: dict):
         self.engine = config.get("engine", "stripped")  # 'stripped' or 'full'
         self.api_base = config.get("api_base")
-        self.api_key = config.get("api_key", "not-needed")
+        self.api_key = config.get("api_key") or "not-needed"
         self.model_name = config.get("model_name")
 
         if not self.api_base or not self.model_name:

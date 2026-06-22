@@ -349,6 +349,10 @@ class Orchestrator:
         """
         print(f"Running Pair ID {pair['id']} via Path {path}")
 
+        if path == "NEEDS_SETUP":
+            self.db_writer.update_pair_status(pair["id"], "NEEDS_SETUP")
+            return {"pair_id": pair["id"], "status": "NEEDS_SETUP"}
+
         async with BrowserSession() as session:
             try:
                 if path == "A":
