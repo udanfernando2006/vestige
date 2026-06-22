@@ -213,40 +213,35 @@ async def _run(args) -> int:
     The Orchestrator checks this exit code when running as a subprocess.
     """
 
-    print("Resolving target URL...")
+    print("Resolving target URL...", file=sys.stderr)
     target = load_target(args.pair_id, args.url, args.store)
 
-    print(f"Fetching HTML: {target['url']}")
+    print(f"Fetching HTML: {target['url']}", file=sys.stderr)
     raw_html = await fetch_html(target["url"])
 
-    provider = os.environ.get("LLM_PROVIDER", "openrouter")
-    model = os.environ.get("LLM_MODEL", "openrouter/free")
+    api_base = os.environ.get("SELECTOR_API_BASE")
+    api_key = os.environ.get("SELECTOR_API_KEY", "")
+    model = os.environ.get("SELECTOR_MODEL")
 
-    if provider == "ollama":
+    if not api_base or not model:
         print(
-            "Warning: Local models are not reliable for selector discovery. "
-            "Set LLM_PROVIDER=openrouter or LLM_PROVIDER=anthropic.",
-            file=sys.stderr,
+            "Error: SELECTOR_API_BASE and SELECTOR_MODEL must be set.", file=sys.stderr
         )
         return 1
 
-    api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-
     extractor = Extractor(
         {
-            "engine": "cloud",
+            "engine": "full",  # selector discovery always needs class/id — not configurable
             "api_base": api_base,
             "api_key": api_key,
             "model_name": model,
-            "provider": provider,
         }
     )
 
     cleaned_html = extractor.clean_html(raw_html)
 
     title_context = target["book_name"] or "unknown"
-    print(f"Calling LLM ({provider} / {model})...")
+    print(f"Calling LLM ({model})...", file=sys.stderr)
     selectors = extractor.extract_selectors(cleaned_html, title_context)
 
     if "error" in selectors:
@@ -271,7 +266,7 @@ async def _run(args) -> int:
             )
             return 1
 
-        print("Validating selectors against live page...")
+        print("Validating selectors against live page...", file=sys.stderr)
         validation = await validate_selectors(target["url"], price_sel, stock_sel)
 
         if not (validation.price_passed and validation.stock_passed):

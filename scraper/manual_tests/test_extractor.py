@@ -44,7 +44,7 @@ async def get_html(url):
 
 async def test_local_extraction(target_book_title, test_urls):
     for url in test_urls:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Testing URL: {url}")
         print(f"Target Title: '{target_book_title}'")
         print("=" * 80)

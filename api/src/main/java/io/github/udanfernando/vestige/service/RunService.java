@@ -5,30 +5,47 @@ import io.github.udanfernando.vestige.dto.DiscoverResultDto;
 import io.github.udanfernando.vestige.dto.RunSummaryDto;
 import io.github.udanfernando.vestige.exception.PipelineExecutionException;
 import io.github.udanfernando.vestige.exception.SelectorDiscoveryException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
-import java.io.File;
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.nio.file.*;
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class RunService {
 
     private final ObjectMapper objectMapper;
+    private final RestClient restClient;
 
     @Value("${vestige.log-dir:logs}")
     private String logDir;
 
-    @Value("${vestige.pipeline-command:python scraper/main.py}")
-    private String pipelineCommand;
+    public RunService(
+            ObjectMapper objectMapper,
+            @Value("${vestige.scraper-url:http://scraper-server:8000}") String scraperUrl) {
+        this.objectMapper = objectMapper;
 
-    @Value("${vestige.discover-command:python scraper/tools/discover_selectors.py}")
-    private String discoverCommand;
+        // A full scrape run can take well over a minute. RestClient's default
+        // timeouts are a few seconds — without this, a perfectly healthy long
+        // run gets reported as a failure.
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(Duration.ofMinutes(3));
+
+        this.restClient = RestClient.builder()
+                .baseUrl(scraperUrl)
+                .requestFactory(factory)
+                .build();
+    }
 
     public List<RunSummaryDto> getRecentRuns() throws IOException {
         Path logPath = Paths.get(logDir);
@@ -64,40 +81,40 @@ public class RunService {
         return summaries;
     }
 
-    public RunSummaryDto trigger() throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(pipelineCommand.split("\\s+"))
-                .redirectErrorStream(true)
-                .directory(new File(System.getProperty("user.dir")));
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-
-        Process process = pb.start();
-        String output = new String(process.getInputStream().readAllBytes());
-        int exitCode = process.waitFor();
-
-        if (exitCode != 0) {
-            throw new PipelineExecutionException("Pipeline exited with code " + exitCode, output);
+    public RunSummaryDto trigger() {
+        try {
+            restClient.post().uri("/run").retrieve().toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            throw new PipelineExecutionException(
+                    "Scraper service returned " + e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new PipelineExecutionException(
+                    "Could not reach scraper service: " + e.getMessage(), "");
         }
 
-        List<RunSummaryDto> runs = getRecentRuns();
-        return runs.isEmpty() ? null : runs.get(0);
+        try {
+            List<RunSummaryDto> runs = getRecentRuns();
+            return runs.isEmpty() ? null : runs.get(0);
+        } catch (IOException e) {
+            throw new PipelineExecutionException("Pipeline ran but log read failed: " + e.getMessage(), "");
+        }
     }
 
-    public DiscoverResultDto discover(Long pairId) throws IOException, InterruptedException {
-        String[] cmd = (discoverCommand + " --pair-id " + pairId).split("\\s+");
-        ProcessBuilder pb = new ProcessBuilder(cmd)
-                .redirectErrorStream(false)
-                .directory(new File(System.getProperty("user.dir")));
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-
-        Process process = pb.start();
-        String stdout = new String(process.getInputStream().readAllBytes());
-        int exitCode = process.waitFor();
-
-        if (exitCode != 0) {
-            throw new SelectorDiscoveryException("Discovery failed", stdout);
+    public DiscoverResultDto discover(Long pairId) {
+        String stdoutJson;
+        try {
+            stdoutJson = restClient.post()
+                    .uri("/discover/{id}", pairId)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RestClientResponseException e) {
+            throw new SelectorDiscoveryException(
+                    "Discovery failed (" + e.getStatusCode() + ")", e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new SelectorDiscoveryException("Could not reach scraper service: " + e.getMessage(), "");
         }
 
-        DiscoverToolOutput parsed = objectMapper.readValue(stdout, DiscoverToolOutput.class);
+        DiscoverToolOutput parsed = objectMapper.readValue(stdoutJson, DiscoverToolOutput.class);
         return DiscoverResultDto.builder()
                 .pairId(pairId)
                 .priceSelector(parsed.getPriceSelector())

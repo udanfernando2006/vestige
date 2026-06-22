@@ -14,3 +14,11 @@ __pycache__/
 *.pyd
 /scraper/cloud_config.py
 /scraper/logs
+
+/logs
+
+.coverage
+.coverage.*
+htmlcov/
+nshtmlcov/
+coverage.xml

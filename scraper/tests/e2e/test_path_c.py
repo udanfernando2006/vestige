@@ -29,7 +29,6 @@ def seeded_pair_c(db_session, db_writer):
 
 
 class TestPathC:
-
     async def test_path_c_writes_in_stock_snapshot(
         self, db_writer, db_session, seeded_pair_c, mock_browser_session
     ):

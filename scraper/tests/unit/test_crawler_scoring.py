@@ -18,7 +18,6 @@ BASE = "https://sarasavi.lk"
 
 
 class TestBuildSearchUrl:
-
     def test_replaces_test_token_with_isbn(self, crawler):
         template = "https://sarasavi.lk/?s=test"
         result = crawler._build_search_url(template, ISBN)
@@ -48,7 +47,6 @@ class TestBuildSearchUrl:
 
 
 class TestExtractCandidateLinks:
-
     def test_extracts_single_link(self, crawler):
         html = '<a href="/books/123">The Last Wish</a>'
         links = crawler._extract_candidate_links(html)
@@ -94,7 +92,6 @@ class TestExtractCandidateLinks:
 
 
 class TestScoreCandidates:
-
     def _score(self, crawler, links):
         return crawler._score_candidates(links, isbn=ISBN, title=TITLE, base_url=BASE)
 

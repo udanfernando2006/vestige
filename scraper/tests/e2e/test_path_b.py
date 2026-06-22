@@ -21,7 +21,7 @@ def seeded_pair_b(db_session, db_writer):
         product_url="https://sarasavi.lk/books/sword-of-destiny",
         price_selector=None,
         stock_selector=None,
-        status="NEEDS_SETUP",
+        status="PENDING",
     )
     db_session.add(pair)
     db_session.commit()
@@ -63,7 +63,6 @@ def _mock_subprocess_failure() -> MagicMock:
 
 
 class TestPathB:
-
     async def test_path_b_successful_discovery_transitions_to_pending(
         self, db_writer, db_session, seeded_pair_b, monkeypatch, mock_browser_session
     ):
@@ -111,16 +110,57 @@ class TestPathB:
         updated = db_writer.get_pair(seeded_pair_b["id"])
         assert updated["status"] == "PENDING"
 
-    async def test_path_b_failed_discovery_leaves_needs_setup(
-        self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
+    async def test_path_b_failed_discovery_falls_back_to_direct_extraction(
+        self,
+        db_writer,
+        db_session,
+        seeded_pair_b,
+        mock_browser_session,
+        llm_direct_response,
+        monkeypatch,
     ):
+        """discover_selectors.py --commit fails -> Orchestrator falls back to Path D
+        this run. Selectors stay unset (Path B retries next run), but the pair gets
+        a usable, correctly-labeled snapshot instead of being left with nothing."""
         monkeypatch.setenv("LLM_MODE", "selector")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
+        monkeypatch.setenv("DIRECT_API_BASE", "https://example.test/v1")
+        monkeypatch.setenv("DIRECT_MODEL", "test-model")
 
         orchestrator = Orchestrator(db_writer=db_writer)
-        mock_result = _mock_subprocess_failure()
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("subprocess.run", return_value=_mock_subprocess_failure()):
+            with patch(
+                "pipeline.llm_extractor.Extractor._call_llm",
+                return_value=llm_direct_response,
+            ):
+                with patch(
+                    "pipeline.orchestrator.BrowserSession",
+                    return_value=mock_browser_session,
+                ):
+                    await orchestrator.run_all()
+
+        updated = db_writer.get_pair(seeded_pair_b["id"])
+        assert updated["price_selector"] is None
+        assert updated["stock_selector"] is None
+        assert updated["status"] != "NEEDS_SETUP"
+
+        snapshot = db_writer.get_last_snapshot(seeded_pair_b["id"])
+        assert snapshot["source"] == "llm_direct"
+
+    async def test_path_b_failed_discovery_and_failed_fallback_marks_needs_setup(
+        self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
+    ):
+        """If the fallback also has nowhere to go (no DIRECT_* configured), the
+        pair lands in NEEDS_SETUP — now reserved for 'no LLM path worked at all.'"""
+        monkeypatch.setenv("LLM_MODE", "selector")
+        monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
+        monkeypatch.delenv("DIRECT_API_BASE", raising=False)
+        monkeypatch.delenv("DIRECT_MODEL", raising=False)
+
+        orchestrator = Orchestrator(db_writer=db_writer)
+
+        with patch("subprocess.run", return_value=_mock_subprocess_failure()):
             with patch(
                 "pipeline.orchestrator.BrowserSession",
                 return_value=mock_browser_session,

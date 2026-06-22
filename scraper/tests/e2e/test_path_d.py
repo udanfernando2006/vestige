@@ -26,7 +26,6 @@ def seeded_pair_d(db_session, db_writer):
 
 
 class TestPathD:
-
     async def test_path_d_writes_snapshot_with_llm_direct_source(
         self,
         db_writer,
@@ -40,6 +39,8 @@ class TestPathD:
 
         monkeypatch.setenv("LLM_MODE", "direct")
         monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "false")
+        monkeypatch.setenv("DIRECT_API_BASE", "https://example.test/v1")
+        monkeypatch.setenv("DIRECT_MODEL", "test-model")
 
         orchestrator = Orchestrator(db_writer=db_writer)
 
@@ -74,7 +75,8 @@ class TestPathD:
     ):
         """In direct mode, selectors should never be cached."""
         monkeypatch.setenv("LLM_MODE", "direct")
-
+        monkeypatch.setenv("DIRECT_API_BASE", "https://example.test/v1")
+        monkeypatch.setenv("DIRECT_MODEL", "test-model")
         orchestrator = Orchestrator(db_writer=db_writer)
 
         with patch(
