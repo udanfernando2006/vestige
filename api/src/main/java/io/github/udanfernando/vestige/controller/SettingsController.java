@@ -5,6 +5,8 @@ import io.github.udanfernando.vestige.dto.SettingsUpdateDto;
 import io.github.udanfernando.vestige.exception.SettingsSyncException;
 import io.github.udanfernando.vestige.service.SettingsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,11 +30,18 @@ public class SettingsController {
         return ResponseEntity.noContent().build();
     }
 
-    // Scoped here, not GlobalExceptionHandler — mirrors RunController's pattern
-    // for scraper-server-specific failures. 502, not 500: this API is acting as
-    // a gateway to an upstream service it depends on, which is the more precise status.
     @ExceptionHandler(SettingsSyncException.class)
     public ResponseEntity<Map<String, String>> handleSyncFailure(SettingsSyncException ex) {
-        return ResponseEntity.status(502).body(Map.of("error", ex.getMessage()));
+        HttpStatusCode upstreamStatus = ex.getStatusCode();
+
+        // Branch 1: The scraper-server was reachable but rejected our inputs (e.g., 400, 422 Unprocessable)
+        if (upstreamStatus != null && upstreamStatus.is4xxClientError()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Invalid configuration value: " + ex.getMessage()));
+        }
+
+        // Branch 2: True connection failure / 5xx internal server error from the upstream daemon
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Map.of("error", ex.getMessage()));
     }
 }

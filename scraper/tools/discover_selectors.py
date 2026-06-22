@@ -182,23 +182,6 @@ async def validate_selectors(
 
 
 # ---------------------------------------------------------------------------
-# Step 7 — Commit validated selectors to the database
-# ---------------------------------------------------------------------------
-
-
-def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
-    """
-    Writes price_selector and stock_selector to tracking_pairs.
-    Uses DBWriter.update_pair_selectors() which also sets selector_found_at
-    and transitions pair status from NEEDS_SETUP → PENDING automatically.
-    """
-
-    engine = create_engine(os.environ["DATABASE_URL"])
-    db = DBWriter(engine, cipher=build_cipher_from_env())
-    db.update_pair_selectors(pair_id, price_sel, stock_sel)
-
-
-# ---------------------------------------------------------------------------
 # Security step
 # ---------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from models.result import AvailabilityResult
 from db.models import SettingOverride
+from db.writer import DBWriter
 from security.crypto import SettingsCipher
 
 # ---------------------------------------------------------------------------
@@ -249,6 +250,14 @@ def valid_cipher():
 
 
 class TestSettings:
+    def test_constructor_cipher_param_is_actually_wired(self, db_session, valid_cipher):
+        """Regression test: catches the case where __init__ stores the cipher
+        under a different attribute name than the rest of the class reads from."""
+        engine = db_session.get_bind()
+        writer = DBWriter(engine, cipher=valid_cipher)
+        writer.apply_setting_update("SELECTOR_API_KEY", "secret123")
+        assert writer.get_settings()["SELECTOR_API_KEY"] == "secret123"
+        
     def test_get_settings_precedence_and_fallback(self, db_writer):
         """Verifies that DB overrides take priority over env vars, falling back safely when missing."""
         # 1. Fallback case: DB is empty, should extract from process environment

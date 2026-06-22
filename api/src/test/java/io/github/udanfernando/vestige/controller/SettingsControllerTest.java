@@ -85,6 +85,7 @@ class SettingsControllerTest {
 
     @Test
     void shouldReturn502BadGatewayWhenUpstreamScraperServiceFails() throws Exception {
+        // This tests Branch 2 (Connection issues/5xx) - stays status().isBadGateway()
         when(settingsService.getSettings())
                 .thenThrow(new SettingsSyncException("Could not reach scraper service: Connection refused"));
 
@@ -92,6 +93,23 @@ class SettingsControllerTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.error").value("Could not reach scraper service: Connection refused"));
+
+        verify(settingsService, times(1)).getSettings();
+    }
+
+    @Test
+    void shouldReturn400BadRequestWhenUpstreamScraperServiceRejectsInput() throws Exception {
+        // This tests Branch 1 (Upstream 4xx Client Error validation rejection)
+        // We pass HttpStatus.UNPROCESSABLE_ENTITY (422) as the simulation source code
+        org.springframework.http.HttpStatus upstreamStatus = org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
+
+        when(settingsService.getSettings())
+                .thenThrow(new SettingsSyncException("Value must be one of 'direct', 'selector'", upstreamStatus));
+
+        mockMvc.perform(get("/api/settings"))
+                .andExpect(status().isBadRequest()) // Asserts Java Gateway correctly returns 400 Bad Request
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error").value("Invalid configuration value: Value must be one of 'direct', 'selector'"));
 
         verify(settingsService, times(1)).getSettings();
     }

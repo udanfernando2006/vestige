@@ -34,10 +34,11 @@ class Orchestrator:
         all_results = []
         changes = []
         errors = []
+        settings = self.db_writer.get_settings()
 
         for pair in pairs:
-            path = self.determine_path(pair)
-            result = await self.run_pair(pair, path)
+            path = self.determine_path(pair, settings)
+            result = await self.run_pair(pair, path, settings)
 
             pair_summary = {
                 "pair_id": pair["id"],
@@ -69,7 +70,6 @@ class Orchestrator:
                             "to": availability.status,
                         }
                     )
-
             elif result.get("status") == "NEEDS_SETUP":
                 pass  # DBWriter already updated status; just record it
 
@@ -98,18 +98,18 @@ class Orchestrator:
         )
         return summary
 
-    def is_llm_discovery_enabled(self) -> bool:
+    def is_llm_discovery_enabled(self, settings: dict) -> bool:
         """Reads LLM_DISCOVERY_ENABLED from settings; returns bool."""
         return (
-            self.db_writer.get_settings()["LLM_DISCOVERY_ENABLED"].strip().lower()
+            settings["LLM_DISCOVERY_ENABLED"].strip().lower()
             == "true"
         )
 
-    def get_llm_mode(self) -> str:
+    def get_llm_mode(self, settings: dict) -> str:
         """Reads LLM_MODE from settings; returns 'direct' or 'selector'."""
-        return self.db_writer.get_settings()["LLM_MODE"].strip().lower()
+        return settings["LLM_MODE"].strip().lower()
 
-    def determine_path(self, pair: TrackingPair) -> str:
+    def determine_path(self, pair: TrackingPair, settings: dict) -> str:
         """
         Inspects tracking pair state to return execution path A, B, C, or D.
         """
@@ -120,9 +120,9 @@ class Orchestrator:
             return "A"
         elif has_url and has_selectors:
             return "C"
-        elif self.get_llm_mode() == "direct":
+        elif self.get_llm_mode(settings) == "direct":
             return "D"
-        elif self.is_llm_discovery_enabled():
+        elif self.is_llm_discovery_enabled(settings):
             return "B"
         else:
             return "NEEDS_SETUP"
@@ -173,7 +173,7 @@ class Orchestrator:
         return summary
 
     async def _run_pair_path_a(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """
         Path A: Discovery.
@@ -214,18 +214,18 @@ class Orchestrator:
         pair["product_url"] = found_url
 
         # Determine next routing based on LLM_MODE
-        next_path = "D" if self.get_llm_mode() == "direct" else "B"
+        next_path = "D" if self.get_llm_mode(settings) == "direct" else "B"
         print(f"Path A completed. Routing to Path {next_path}")
 
         if next_path == "B":
-            return await self._run_pair_path_b(pair, session)
-        return await self._run_pair_path_d(pair, session)
+            return await self._run_pair_path_b(pair, session, settings)
+        return await self._run_pair_path_d(pair, session, settings)
 
     async def _run_pair_path_b(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """Path B: LLM Discovery of Selectors + Fast Scrape."""
-        if not self.is_llm_discovery_enabled():
+        if not self.is_llm_discovery_enabled(settings):
             print(
                 f"Path B skipped for Pair {pair['id']}: LLM discovery disabled. Marking NEEDS_SETUP."
             )
@@ -252,7 +252,7 @@ class Orchestrator:
                 f"Path B: Discovery/validation failed for Pair {pair['id']} — falling back to direct extraction this run."
             )
             try:
-                return await self._run_pair_path_d(pair, session)
+                return await self._run_pair_path_d(pair, session, settings)
             except Exception as e:
                 print(
                     f"Path B: Direct-extraction fallback also failed for Pair {pair['id']}: {e}"
@@ -300,12 +300,11 @@ class Orchestrator:
         return {"pair_id": pair["id"], "status": "COMPLETED", "result": scrape_data}
 
     async def _run_pair_path_d(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """Path D: LLM Direct Extraction bypassing CSS Selectors."""
         await session.navigate(pair["product_url"])
         html = await session.get_html()
-        settings = self.db_writer.get_settings()
         extractor = Extractor(
             {
                 "engine": "stripped",
@@ -346,7 +345,7 @@ class Orchestrator:
             "result": availability_result,
         }
 
-    async def run_pair(self, pair: TrackingPair, path: str) -> dict:
+    async def run_pair(self, pair: TrackingPair, path: str, settings: dict) -> dict:
         """
         Master execution router. Opens one BrowserSession per pair and passes it through the module chain.
         """
@@ -359,13 +358,13 @@ class Orchestrator:
         async with BrowserSession() as session:
             try:
                 if path == "A":
-                    return await self._run_pair_path_a(pair, session)
+                    return await self._run_pair_path_a(pair, session, settings)
                 elif path == "B":
-                    return await self._run_pair_path_b(pair, session)
+                    return await self._run_pair_path_b(pair, session, settings)
                 elif path == "C":
                     return await self._run_pair_path_c(pair, session)
                 elif path == "D":
-                    return await self._run_pair_path_d(pair, session)
+                    return await self._run_pair_path_d(pair, session, settings)
                 else:
                     raise Exception(f"Unknown path routing: {path}")
 
