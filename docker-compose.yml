@@ -125,6 +125,8 @@ services:
             LOG_DIR: /app/logs
             PYTHONIOENCODING: utf-8
             BOOKS_CONFIG_PATH: /app/books_config.json
+
+            SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
         volumes:
             - ./logs:/app/logs
             - ./books_config.json:/app/books_config.json:ro
@@ -192,6 +194,8 @@ services:
 
             # Books configuration
             BOOKS_CONFIG_PATH: /app/books_config.json
+
+            SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
 
         volumes:
             # Bind-mount the host logs/ directory so:
