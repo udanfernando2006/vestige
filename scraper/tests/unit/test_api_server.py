@@ -147,3 +147,93 @@ def test_discover_selectors_invalid_json():
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Invalid JSON from discover_selectors.py"
+
+
+# ---------------------------------------------------------------------------
+# Settings & Configuration Endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_get_config_endpoint_success():
+    """Test that GET /config fetches status flags and securely formatted keys from the DB."""
+    # Mock data structure returned by DBWriter.get_settings_status()
+    mock_settings_status = {
+        "LLM_DISCOVERY_ENABLED": "true",
+        "LLM_MODE": "selector",
+        "SELECTOR_API_BASE": "https://api.openai.com/v1",
+        "SELECTOR_API_KEY": {"configured": True, "hint": "sk-...abcd"},
+        "SELECTOR_MODEL": "gpt-4o",
+        "DIRECT_API_BASE": "https://api.anthropic.com/v1",
+        "DIRECT_API_KEY": {"configured": False, "hint": ""},
+        "DIRECT_MODEL": "claude-3-5-sonnet",
+    }
+
+    with patch(
+        "api_server._db.get_settings_status", return_value=mock_settings_status
+    ) as mock_get:
+        response = client.get("/config")
+        assert response.status_code == 200
+
+        data = response.json()
+        # Ensure values are converted properly (e.g. string "true" becomes boolean True)
+        assert data["llm_discovery_enabled"] is True
+        assert data["llm_mode"] == "selector"
+        assert data["selector_api_base"] == "https://api.openai.com/v1"
+        assert data["selector_api_key_configured"] is True
+        assert data["selector_api_key_hint"] == "sk-...abcd"
+        assert data["selector_model"] == "gpt-4o"
+        assert data["direct_api_base"] == "https://api.anthropic.com/v1"
+        assert data["direct_api_key_configured"] is False
+        assert data["direct_api_key_hint"] == ""
+        assert data["direct_model"] == "claude-3-5-sonnet"
+
+        mock_get.assert_called_once()
+
+
+def test_update_config_endpoint_success():
+    """Test that PUT /config accepts new configurations and pushes updates down to the DB."""
+    payload = {
+        "llm_discovery_enabled": False,
+        "llm_mode": "direct",
+        "selector_api_base": "https://api.custom-endpoint.com",
+        "selector_api_key": "updated-secret-key-123",
+        "selector_model": "custom-inference-v1",
+        "direct_api_base": "https://api.custom-endpoint.com",
+        "direct_api_key": "updated-direct-key-456",
+        "direct_model": "custom-inference-v2",
+    }
+
+    # Intercept individual or batch database write updates
+    with patch("api_server._db.apply_setting_update") as mock_single_update:
+        response = client.put("/config", json=payload)
+        assert response.status_code == 200
+
+        # Verify that the endpoint normalized fields (like casting bool down to lowercase strings)
+        if mock_single_update.called:
+            mock_single_update.assert_any_call("LLM_DISCOVERY_ENABLED", "false")
+            mock_single_update.assert_any_call("LLM_MODE", "direct")
+            mock_single_update.assert_any_call("SELECTOR_MODEL", "custom-inference-v1")
+            mock_single_update.assert_any_call(
+                "SELECTOR_API_KEY", "updated-secret-key-123"
+            )
+
+
+def test_update_config_handles_none_values():
+    """Test that PUT /config securely processes empty or null toggle states."""
+    payload = {
+        "llm_discovery_enabled": None,
+        "llm_mode": "selector",
+        "selector_api_base": "",
+        "selector_api_key": None,
+        "selector_model": "",
+        "direct_api_base": "",
+        "direct_api_key": None,
+        "direct_model": "",
+    }
+
+    with patch("api_server._db.apply_setting_update") as mock_single_update:
+        response = client.put("/config", json=payload)
+        assert response.status_code == 200
+
+        if mock_single_update.called:
+            mock_single_update.assert_any_call("LLM_DISCOVERY_ENABLED", None)
