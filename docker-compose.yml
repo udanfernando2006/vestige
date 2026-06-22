@@ -100,18 +100,20 @@ services:
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
             DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/vestige
 
-            # LLM configuration — same as the one-shot scraper job below; the
-            # /discover/{id} endpoint needs these to run discover_selectors.py
+            # LLM configuration — role-based: SELECTOR_* powers selector discovery
+            # (discover_selectors.py / Path B), DIRECT_* powers direct extraction (Path D).
+            # Either can point at any OpenAI-compatible endpoint — Groq, Gemini's OpenAI-
+            # compat layer, OpenRouter, Anthropic's OpenAI-compat layer, or a local Ollama
+            # install. If Ollama runs on the host rather than in a container, use
+            # http://host.docker.internal:11434/v1 as the *_API_BASE value.
             LLM_DISCOVERY_ENABLED: ${LLM_DISCOVERY_ENABLED:-false}
             LLM_MODE: ${LLM_MODE:-direct}
-            LLM_ENGINE: ${LLM_ENGINE:-cloud}
-            LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
-            LLM_MODEL: ${LLM_MODEL:-anthropic/claude-haiku-4-5}
-            OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-            ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-            # host.docker.internal resolves to the host machine from inside a container —
-            # used when Ollama is running on the host rather than in another container.
-            OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+            SELECTOR_API_BASE: ${SELECTOR_API_BASE:-}
+            SELECTOR_API_KEY: ${SELECTOR_API_KEY:-}
+            SELECTOR_MODEL: ${SELECTOR_MODEL:-}
+            DIRECT_API_BASE: ${DIRECT_API_BASE:-}
+            DIRECT_API_KEY: ${DIRECT_API_KEY:-}
+            DIRECT_MODEL: ${DIRECT_MODEL:-}
 
             # Email notifications — a UI-triggered run can change status just like a
             # scheduled one, so this needs the same notification config.
@@ -163,17 +165,20 @@ services:
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
             DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/vestige
 
-            # LLM configuration — all values fall back to .env defaults if unset
+            # LLM configuration — role-based: SELECTOR_* powers selector discovery
+            # (discover_selectors.py / Path B), DIRECT_* powers direct extraction (Path D).
+            # Either can point at any OpenAI-compatible endpoint — Groq, Gemini's OpenAI-
+            # compat layer, OpenRouter, Anthropic's OpenAI-compat layer, or a local Ollama
+            # install. If Ollama runs on the host rather than in a container, use
+            # http://host.docker.internal:11434/v1 as the *_API_BASE value.
             LLM_DISCOVERY_ENABLED: ${LLM_DISCOVERY_ENABLED:-false}
             LLM_MODE: ${LLM_MODE:-direct}
-            LLM_ENGINE: ${LLM_ENGINE:-cloud}
-            LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
-            LLM_MODEL: ${LLM_MODEL:-anthropic/claude-haiku-4-5}
-            OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-            ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-            # host.docker.internal resolves to the host machine from inside a container —
-            # used when Ollama is running on the host rather than in another container.
-            OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+            SELECTOR_API_BASE: ${SELECTOR_API_BASE:-}
+            SELECTOR_API_KEY: ${SELECTOR_API_KEY:-}
+            SELECTOR_MODEL: ${SELECTOR_MODEL:-}
+            DIRECT_API_BASE: ${DIRECT_API_BASE:-}
+            DIRECT_API_KEY: ${DIRECT_API_KEY:-}
+            DIRECT_MODEL: ${DIRECT_MODEL:-}
 
             # Email notifications
             SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}

@@ -32,11 +32,12 @@ jobs:
             POSTGRES_PASSWORD: testpassword
             LLM_DISCOVERY_ENABLED: "false"
             LLM_MODE: direct
-            LLM_ENGINE: cloud
-            LLM_PROVIDER: openrouter
-            LLM_MODEL: anthropic/claude-haiku-4-5
-            OPENROUTER_API_KEY: test-key-not-used
-            ANTHROPIC_API_KEY: test-key-not-used
+            SELECTOR_API_BASE: https://example.test/v1
+            SELECTOR_API_KEY: test-key-not-used
+            SELECTOR_MODEL: test-model-not-used
+            DIRECT_API_BASE: https://example.test/v1
+            DIRECT_API_KEY: test-key-not-used
+            DIRECT_MODEL: test-model-not-used
             LOG_DIR: /tmp/vestige-test-logs
 
         defaults:
