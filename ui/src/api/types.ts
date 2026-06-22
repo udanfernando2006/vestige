@@ -119,3 +119,28 @@ export interface DiscoverResultDto {
     reason?: string; // populated only on failure
     committed: boolean;
 }
+
+// ---- Settings ----
+export interface SettingsDto {
+    llmDiscoveryEnabled: boolean;
+    llmMode: string;
+    selectorApiBase: string;
+    selectorApiKeyConfigured: boolean;
+    selectorApiKeyHint?: string;
+    selectorModel: string;
+    directApiBase: string;
+    directApiKeyConfigured: boolean;
+    directApiKeyHint?: string;
+    directModel: string;
+}
+
+export interface SettingsUpdateDto {
+    llmDiscoveryEnabled?: boolean;
+    llmMode?: string;
+    selectorApiBase?: string;
+    selectorApiKey?: string;
+    selectorModel?: string;
+    directApiBase?: string;
+    directApiKey?: string;
+    directModel?: string;
+}

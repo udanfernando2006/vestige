@@ -12,6 +12,8 @@ import type {
     SnapshotHistoryDto,
     RunSummaryDto,
     DiscoverResultDto,
+    SettingsDto,
+    SettingsUpdateDto
 } from "./types";
 
 export class ApiError extends Error {
@@ -139,4 +141,16 @@ export function triggerRun(): Promise<RunSummaryDto> {
 
 export function discoverSelectors(pairId: number): Promise<DiscoverResultDto> {
     return request(`/api/runs/discover/${pairId}`, { method: "POST" });
+}
+
+// ---- Settings ----
+export function getSettings(): Promise<SettingsDto> {
+    return request("/api/settings");
+}
+
+export function updateSettings(dto: SettingsUpdateDto): Promise<void> {
+    return request("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(dto),
+    });
 }
