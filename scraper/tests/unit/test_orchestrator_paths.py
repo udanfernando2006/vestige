@@ -1,3 +1,4 @@
+import os
 import pytest
 from pipeline.orchestrator import Orchestrator
 from unittest.mock import MagicMock
@@ -5,7 +6,15 @@ from unittest.mock import MagicMock
 
 @pytest.fixture(scope="module")
 def orchestrator():
-    return Orchestrator(db_writer=MagicMock())
+    db_writer = MagicMock()
+
+    # Force the mock get_settings() to return active env vars dynamically
+    db_writer.get_settings.side_effect = lambda: {
+        "LLM_MODE": os.environ.get("LLM_MODE", ""),
+        "LLM_DISCOVERY_ENABLED": os.environ.get("LLM_DISCOVERY_ENABLED", ""),
+    }
+
+    return Orchestrator(db_writer=db_writer)
 
 
 def _pair(

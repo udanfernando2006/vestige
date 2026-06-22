@@ -47,7 +47,7 @@ class DBWriter:
         """Effective config for every settings key: DB override if present
         (decrypted if needed), else the process's own env var, else "".
         One batched query, not one round trip per key."""
-        with self.Session as session:
+        with self.Session() as session:
             rows = (
                 session.query(SettingOverride)
                 .filter(SettingOverride.key.in_(SETTINGS_KEYS))
@@ -97,7 +97,7 @@ class DBWriter:
         value=<text>  -> set/overwrite, encrypting first if it's a secret key."""
         if value is None:
             return
-        with self.Session as session:
+        with self.Session() as session:
             if value == "":
                 existing = session.get(SettingOverride, key)
                 if existing:

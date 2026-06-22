@@ -62,7 +62,7 @@ class ValidationResult:
 
 
 def load_target(
-    pair_id: Optional[int], url: Optional[str], store: Optional[str]
+    pair_id: Optional[int], url: Optional[str], store: Optional[str], db: DBWriter
 ) -> dict:
     """
     Resolves the product URL and store name.
@@ -73,8 +73,6 @@ def load_target(
     Exits with a clear error message if the inputs are invalid.
     """
     if pair_id is not None:
-        engine = create_engine(os.environ["DATABASE_URL"])
-        db = DBWriter(engine, cipher=build_cipher_from_env())
         pair = db.get_pair(pair_id)
 
         if not pair:
@@ -227,14 +225,14 @@ async def _run(args) -> int:
     The Orchestrator checks this exit code when running as a subprocess.
     """
 
+    engine = create_engine(os.environ["DATABASE_URL"])
+    db = DBWriter(engine, cipher=build_cipher_from_env())
+
     print("Resolving target URL...", file=sys.stderr)
-    target = load_target(args.pair_id, args.url, args.store)
+    target = load_target(args.pair_id, args.url, args.store, db)
 
     print(f"Fetching HTML: {target['url']}", file=sys.stderr)
     raw_html = await fetch_html(target["url"])
-
-    engine = create_engine(os.environ["DATABASE_URL"])
-    db = DBWriter(engine, cipher=build_cipher_from_env())
 
     llm_config = _load_llm_config(db)
 
@@ -288,7 +286,7 @@ async def _run(args) -> int:
             print(json.dumps(result, indent=2))
             return 1  # non-zero exit → Orchestrator keeps pair as NEEDS_SETUP
 
-        commit_to_db(target["pair_id"], price_sel, stock_sel)
+        db.update_pair_selectors(target["pair_id"], price_sel, stock_sel)
         result = {
             "price_selector": price_sel,
             "stock_selector": stock_sel,
