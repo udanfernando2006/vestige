@@ -1,17 +1,20 @@
-"""
-scraper/db/writer.py
-Database access layer — all reads and writes go through this class.
-CORRECTED VERSION: All detached session issues fixed, all missing methods added.
-"""
-
+import os
 from sqlalchemy.orm import sessionmaker, joinedload
 from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot
+from db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot, SettingOverride
 from models.result import AvailabilityResult
+from security.crypto import SettingsCipher
 
+_SECRET_KEYS = {"SELECTOR_API_KEY", "DIRECT_API_KEY"}
+
+SETTINGS_KEYS = [
+    "LLM_DISCOVERY_ENABLED", "LLM_MODE",
+    "SELECTOR_API_BASE", "SELECTOR_API_KEY", "SELECTOR_MODEL",
+    "DIRECT_API_BASE", "DIRECT_API_KEY", "DIRECT_MODEL",
+]
 
 class DBWriter:
     """
@@ -19,8 +22,81 @@ class DBWriter:
     All methods serialize ORM objects to dicts before returning to avoid detached session errors.
     """
 
-    def __init__(self, engine):
+    def __init__(self, engine, cipher: "SettingsCipher | None" = None):
         self.Session = sessionmaker(bind=engine)
+        self.cipher = cipher
+
+    # =========================================================================
+    # SECURITY
+    # =========================================================================
+
+    def get_settings(self) -> dict[str, str]:
+        """Effective config for every settings key: DB override if present
+        (decrypted if needed), else the process's own env var, else "".
+        One batched query, not one round trip per key."""
+        with self.Session as session:
+            rows = session.query(SettingOverride).filter(
+                SettingOverride.key.in_(SETTINGS_KEYS)
+            ).all()
+            overrides = {r.key: (r.value, r.is_encrypted) for r in rows}
+
+        result = {}
+        for key in SETTINGS_KEYS:
+            if key in overrides:
+                value, is_encrypted = overrides[key]
+                if is_encrypted:
+                    if not self._cipher:
+                        raise RuntimeError(
+                            f"{key} is stored encrypted but SETTINGS_ENCRYPTION_KEY isn't configured"
+                        )
+                    value = self._cipher.decrypt(value)
+                result[key] = value
+            else:
+                result[key] = os.environ.get(key, "")
+        return result
+    
+    def get_settings_status(self) -> dict:
+        """Same as get_settings(), except secret keys are never returned in
+        the clear — only whether they're set, plus a masked hint. This is
+        what the API layer's GET /config actually calls."""
+        full = self.get_settings()
+        status = {}
+        for key in SETTINGS_KEYS:
+            if key in _SECRET_KEYS:
+                value = full[key]
+                status[key] = {
+                    "configured": bool(value),
+                    "hint": f"••••{value[-4:]}" if len(value) >= 4 else (None if not value else "••••"),
+                }
+            else:
+                status[key] = full[key]
+        return status
+    
+    def apply_setting_update(self, key: str, value: "str | None") -> None:
+        """value=None  -> no change.
+        value=""      -> explicit clear (falls back to env on next read).
+        value=<text>  -> set/overwrite, encrypting first if it's a secret key."""
+        if value is None:
+            return
+        with self.Session as session:
+            if value == "":
+                existing = session.get(SettingOverride, key)
+                if existing:
+                    session.delete(existing)
+                    session.commit()
+                return
+
+            is_encrypted = key in _SECRET_KEYS
+            if is_encrypted and not self._cipher:
+                raise RuntimeError("SETTINGS_ENCRYPTION_KEY isn't configured — can't store a secret setting")
+            stored_value = self._cipher.encrypt(value) if is_encrypted else value
+
+            existing = session.get(SettingOverride, key)
+            if existing:
+                existing.value, existing.is_encrypted = stored_value, is_encrypted
+            else:
+                session.add(SettingOverride(key=key, value=stored_value, is_encrypted=is_encrypted))
+            session.commit()
 
     # =========================================================================
     # CONFIG SEEDING
@@ -415,8 +491,6 @@ class DBWriter:
         Save validated selectors and transition pair from NEEDS_SETUP to PENDING.
         Called by discover_selectors.py after validation passes.
         Also called by API PATCH endpoint when user manually enters selectors.
-
-        ✅ FIXED: Now auto-transitions from NEEDS_SETUP to PENDING
         """
         with self.Session() as session:
             pair = session.query(TrackingPair).filter_by(id=pair_id).first()

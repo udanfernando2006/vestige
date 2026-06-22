@@ -99,12 +99,12 @@ class Orchestrator:
         return summary
 
     def is_llm_discovery_enabled(self) -> bool:
-        """Reads LLM_DISCOVERY_ENABLED from env; returns bool."""
-        return os.environ.get("LLM_DISCOVERY_ENABLED", "false").lower() == "true"
+        """Reads LLM_DISCOVERY_ENABLED from settings; returns bool."""
+        return self.db_writer.get_settings()["LLM_DISCOVERY_ENABLED"].strip().lower() == "true"
 
     def get_llm_mode(self) -> str:
-        """Reads LLM_MODE from env; returns 'direct' or 'selector'."""
-        return os.environ.get("LLM_MODE", "selector").lower()
+        """Reads LLM_MODE from settings; returns 'direct' or 'selector'."""
+        return self.db_writer.get_settings()["LLM_MODE"].strip().lower()
 
     def determine_path(self, pair: TrackingPair) -> str:
         """
@@ -302,13 +302,13 @@ class Orchestrator:
         """Path D: LLM Direct Extraction bypassing CSS Selectors."""
         await session.navigate(pair["product_url"])
         html = await session.get_html()
-
+        settings = self.db_writer.get_settings()
         extractor = Extractor(
             {
                 "engine": "stripped",
-                "api_base": os.environ.get("DIRECT_API_BASE"),
-                "api_key": os.environ.get("DIRECT_API_KEY", ""),
-                "model_name": os.environ.get("DIRECT_MODEL"),
+                "api_base": settings["DIRECT_API_BASE"],
+                "api_key": settings["DIRECT_API_KEY"],
+                "model_name": settings["DIRECT_MODEL"],
             }
         )
         cleaned_html = extractor.clean_html(html)

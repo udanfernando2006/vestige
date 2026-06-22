@@ -5,6 +5,7 @@ from typing import List, Optional
 from sqlalchemy import (
     BigInteger,
     String,
+    Boolean,
     ForeignKey,
     Numeric,
     DateTime,
@@ -89,6 +90,12 @@ class AvailabilitySnapshot(Base):
 
     tracking_pair: Mapped["TrackingPair"] = relationship(back_populates="snapshots")
 
+class SettingOverride(Base):
+    __tablename__ = "setting_overrides"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    is_encrypted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 Index(
     "idx_pair_scraped_desc",

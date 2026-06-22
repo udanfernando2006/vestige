@@ -28,6 +28,7 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
 # Ensure project root is on the path so db/browser imports resolve
 # whether the script is run from scraper/ or the project root.
@@ -36,6 +37,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from browser.session import BrowserSession
 from db.writer import DBWriter
 from pipeline.llm_extractor import Extractor
+from security.crypto import build_cipher_from_env
 
 load_dotenv()
 
@@ -71,10 +73,8 @@ def load_target(
     Exits with a clear error message if the inputs are invalid.
     """
     if pair_id is not None:
-        from sqlalchemy import create_engine
-
         engine = create_engine(os.environ["DATABASE_URL"])
-        db = DBWriter(engine)
+        db = DBWriter(engine, cipher=build_cipher_from_env())
         pair = db.get_pair(pair_id)
 
         if not pair:
@@ -194,12 +194,24 @@ def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
     Uses DBWriter.update_pair_selectors() which also sets selector_found_at
     and transitions pair status from NEEDS_SETUP → PENDING automatically.
     """
-    from sqlalchemy import create_engine
 
     engine = create_engine(os.environ["DATABASE_URL"])
-    db = DBWriter(engine)
+    db = DBWriter(engine, cipher=build_cipher_from_env())
     db.update_pair_selectors(pair_id, price_sel, stock_sel)
 
+# ---------------------------------------------------------------------------
+# Security step
+# ---------------------------------------------------------------------------
+
+
+def _load_llm_config(db: DBWriter) -> dict:
+    settings = db.get_settings()
+    return {
+        "engine": "full",
+        "api_base": settings["SELECTOR_API_BASE"],
+        "api_key": settings["SELECTOR_API_KEY"],
+        "model_name": settings["SELECTOR_MODEL"],
+    }
 
 # ---------------------------------------------------------------------------
 # Core async run logic
@@ -219,29 +231,25 @@ async def _run(args) -> int:
     print(f"Fetching HTML: {target['url']}", file=sys.stderr)
     raw_html = await fetch_html(target["url"])
 
-    api_base = os.environ.get("SELECTOR_API_BASE")
-    api_key = os.environ.get("SELECTOR_API_KEY", "")
-    model = os.environ.get("SELECTOR_MODEL")
+    engine = create_engine(os.environ["DATABASE_URL"])
+    db = DBWriter(engine, cipher=build_cipher_from_env())
 
-    if not api_base or not model:
+    llm_config = _load_llm_config(db)
+
+    if not llm_config.get("api_base") or not llm_config.get("model_name"):
         print(
             "Error: SELECTOR_API_BASE and SELECTOR_MODEL must be set.", file=sys.stderr
         )
         return 1
 
     extractor = Extractor(
-        {
-            "engine": "full",  # selector discovery always needs class/id — not configurable
-            "api_base": api_base,
-            "api_key": api_key,
-            "model_name": model,
-        }
+        llm_config
     )
 
     cleaned_html = extractor.clean_html(raw_html)
 
     title_context = target["book_name"] or "unknown"
-    print(f"Calling LLM ({model})...", file=sys.stderr)
+    print(f"Calling LLM ({llm_config['model_name']})...", file=sys.stderr)
     selectors = extractor.extract_selectors(cleaned_html, title_context)
 
     if "error" in selectors:
@@ -273,7 +281,7 @@ async def _run(args) -> int:
             result = {
                 "price_selector": price_sel if validation.price_passed else None,
                 "stock_selector": stock_sel if validation.stock_passed else None,
-                "model_used": model,
+                "model_used": llm_config["model_name"],
                 "committed": False,
                 "reason": validation.reason,
             }
@@ -286,7 +294,7 @@ async def _run(args) -> int:
             "stock_selector": stock_sel,
             "price_sample": validation.price_sample,
             "stock_sample": validation.stock_sample,
-            "model_used": model,
+            "model_used": llm_config["model_name"],
             "committed": True,
         }
 
@@ -295,7 +303,7 @@ async def _run(args) -> int:
         result = {
             "price_selector": price_sel,
             "stock_selector": stock_sel,
-            "model_used": model,
+            "model_used": llm_config["model_name"],
             "committed": False,
         }
 

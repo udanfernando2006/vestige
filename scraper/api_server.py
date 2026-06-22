@@ -8,10 +8,13 @@ import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
+from typing import Literal, Optional
+from pydantic import BaseModel
 
 from db.models import Base
 from db.writer import DBWriter
 from pipeline.orchestrator import Orchestrator
+from security.crypto import build_cipher_from_env
 from main import run_once
 
 app = FastAPI(title="Vestige Scraper Service")
@@ -23,7 +26,7 @@ app = FastAPI(title="Vestige Scraper Service")
 # silently dropped during a long-lived process's idle periods.
 _engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
 Base.metadata.create_all(_engine)
-_db = DBWriter(_engine)
+_db = DBWriter(_engine, cipher=build_cipher_from_env())
 _orchestrator = Orchestrator(_db)
 
 # Prevents two overlapping runs if "Run Now" is clicked twice in a row.
@@ -31,6 +34,27 @@ _run_lock = asyncio.Lock()
 
 logger = logging.getLogger("uvicorn.error")
 
+class SettingsStatusResponse(BaseModel):
+    llm_discovery_enabled: bool
+    llm_mode: str
+    selector_api_base: str
+    selector_api_key_configured: bool
+    selector_api_key_hint: Optional[str] = None
+    selector_model: str
+    direct_api_base: str
+    direct_api_key_configured: bool
+    direct_api_key_hint: Optional[str] = None
+    direct_model: str
+
+class SettingsUpdateRequest(BaseModel):
+    llm_discovery_enabled: Optional[bool] = None
+    llm_mode: Optional[Literal["direct", "selector"]] = None
+    selector_api_base: Optional[str] = None
+    selector_api_key: Optional[str] = None
+    selector_model: Optional[str] = None
+    direct_api_base: Optional[str] = None
+    direct_api_key: Optional[str] = None
+    direct_model: Optional[str] = None
 
 @app.get("/health")
 async def health():
@@ -89,3 +113,39 @@ async def discover(pair_id: int):
         raise HTTPException(
             status_code=500, detail="Invalid JSON from discover_selectors.py"
         )
+
+@app.get("/config", response_model=SettingsStatusResponse)
+async def get_config():
+    s = _db.get_settings_status()
+    return SettingsStatusResponse(
+        llm_discovery_enabled=s["LLM_DISCOVERY_ENABLED"].strip().lower() == "true",
+        llm_mode=s["LLM_MODE"],
+        selector_api_base=s["SELECTOR_API_BASE"],
+        selector_api_key_configured=s["SELECTOR_API_KEY"]["configured"],
+        selector_api_key_hint=s["SELECTOR_API_KEY"]["hint"],
+        selector_model=s["SELECTOR_MODEL"],
+        direct_api_base=s["DIRECT_API_BASE"],
+        direct_api_key_configured=s["DIRECT_API_KEY"]["configured"],
+        direct_api_key_hint=s["DIRECT_API_KEY"]["hint"],
+        direct_model=s["DIRECT_MODEL"],
+    )
+
+
+@app.put("/config")
+async def update_config(payload: SettingsUpdateRequest):
+    updates = {
+        "LLM_DISCOVERY_ENABLED": None if payload.llm_discovery_enabled is None else str(payload.llm_discovery_enabled).lower(),
+        "LLM_MODE": payload.llm_mode,
+        "SELECTOR_API_BASE": payload.selector_api_base,
+        "SELECTOR_API_KEY": payload.selector_api_key,
+        "SELECTOR_MODEL": payload.selector_model,
+        "DIRECT_API_BASE": payload.direct_api_base,
+        "DIRECT_API_KEY": payload.direct_api_key,
+        "DIRECT_MODEL": payload.direct_model,
+    }
+    try:
+        for key, value in updates.items():
+            _db.apply_setting_update(key, value)
+        return {"status": "success"}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
