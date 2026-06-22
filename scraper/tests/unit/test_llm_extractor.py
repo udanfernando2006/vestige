@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 from pipeline.llm_extractor import Extractor
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

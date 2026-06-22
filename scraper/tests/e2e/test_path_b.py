@@ -148,7 +148,6 @@ class TestPathB:
         snapshot = db_writer.get_last_snapshot(seeded_pair_b["id"])
         assert snapshot["source"] == "llm_direct"
 
-
     async def test_path_b_failed_discovery_and_failed_fallback_marks_needs_setup(
         self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
     ):
