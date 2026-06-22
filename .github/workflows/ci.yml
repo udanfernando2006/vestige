@@ -39,7 +39,7 @@ jobs:
             DIRECT_API_KEY: test-key-not-used
             DIRECT_MODEL: test-model-not-used
             LOG_DIR: /tmp/vestige-test-logs
-            SETTINGS_ENCRYPTION_KEY: dmVzdGlnZS1kZW1vLWtleS0zMi1ieXRlcy1zZWN1cmU0bXU=
+            SETTINGS_ENCRYPTION_KEY: QczWxa4SA3-2zf37DYS1nyYtqPdjEjJ_LY9KDyS32cc=
 
         defaults:
             run:
