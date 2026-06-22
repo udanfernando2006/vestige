@@ -4,17 +4,30 @@ from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from db.models import Series, Book, Store, TrackingPair, AvailabilitySnapshot, SettingOverride
+from db.models import (
+    Series,
+    Book,
+    Store,
+    TrackingPair,
+    AvailabilitySnapshot,
+    SettingOverride,
+)
 from models.result import AvailabilityResult
 from security.crypto import SettingsCipher
 
 _SECRET_KEYS = {"SELECTOR_API_KEY", "DIRECT_API_KEY"}
 
 SETTINGS_KEYS = [
-    "LLM_DISCOVERY_ENABLED", "LLM_MODE",
-    "SELECTOR_API_BASE", "SELECTOR_API_KEY", "SELECTOR_MODEL",
-    "DIRECT_API_BASE", "DIRECT_API_KEY", "DIRECT_MODEL",
+    "LLM_DISCOVERY_ENABLED",
+    "LLM_MODE",
+    "SELECTOR_API_BASE",
+    "SELECTOR_API_KEY",
+    "SELECTOR_MODEL",
+    "DIRECT_API_BASE",
+    "DIRECT_API_KEY",
+    "DIRECT_MODEL",
 ]
+
 
 class DBWriter:
     """
@@ -35,9 +48,11 @@ class DBWriter:
         (decrypted if needed), else the process's own env var, else "".
         One batched query, not one round trip per key."""
         with self.Session as session:
-            rows = session.query(SettingOverride).filter(
-                SettingOverride.key.in_(SETTINGS_KEYS)
-            ).all()
+            rows = (
+                session.query(SettingOverride)
+                .filter(SettingOverride.key.in_(SETTINGS_KEYS))
+                .all()
+            )
             overrides = {r.key: (r.value, r.is_encrypted) for r in rows}
 
         result = {}
@@ -54,7 +69,7 @@ class DBWriter:
             else:
                 result[key] = os.environ.get(key, "")
         return result
-    
+
     def get_settings_status(self) -> dict:
         """Same as get_settings(), except secret keys are never returned in
         the clear — only whether they're set, plus a masked hint. This is
@@ -66,12 +81,16 @@ class DBWriter:
                 value = full[key]
                 status[key] = {
                     "configured": bool(value),
-                    "hint": f"••••{value[-4:]}" if len(value) >= 4 else (None if not value else "••••"),
+                    "hint": (
+                        f"••••{value[-4:]}"
+                        if len(value) >= 4
+                        else (None if not value else "••••")
+                    ),
                 }
             else:
                 status[key] = full[key]
         return status
-    
+
     def apply_setting_update(self, key: str, value: "str | None") -> None:
         """value=None  -> no change.
         value=""      -> explicit clear (falls back to env on next read).
@@ -88,14 +107,20 @@ class DBWriter:
 
             is_encrypted = key in _SECRET_KEYS
             if is_encrypted and not self._cipher:
-                raise RuntimeError("SETTINGS_ENCRYPTION_KEY isn't configured — can't store a secret setting")
+                raise RuntimeError(
+                    "SETTINGS_ENCRYPTION_KEY isn't configured — can't store a secret setting"
+                )
             stored_value = self._cipher.encrypt(value) if is_encrypted else value
 
             existing = session.get(SettingOverride, key)
             if existing:
                 existing.value, existing.is_encrypted = stored_value, is_encrypted
             else:
-                session.add(SettingOverride(key=key, value=stored_value, is_encrypted=is_encrypted))
+                session.add(
+                    SettingOverride(
+                        key=key, value=stored_value, is_encrypted=is_encrypted
+                    )
+                )
             session.commit()
 
     # =========================================================================

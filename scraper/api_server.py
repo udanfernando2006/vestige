@@ -34,6 +34,7 @@ _run_lock = asyncio.Lock()
 
 logger = logging.getLogger("uvicorn.error")
 
+
 class SettingsStatusResponse(BaseModel):
     llm_discovery_enabled: bool
     llm_mode: str
@@ -46,6 +47,7 @@ class SettingsStatusResponse(BaseModel):
     direct_api_key_hint: Optional[str] = None
     direct_model: str
 
+
 class SettingsUpdateRequest(BaseModel):
     llm_discovery_enabled: Optional[bool] = None
     llm_mode: Optional[Literal["direct", "selector"]] = None
@@ -55,6 +57,7 @@ class SettingsUpdateRequest(BaseModel):
     direct_api_base: Optional[str] = None
     direct_api_key: Optional[str] = None
     direct_model: Optional[str] = None
+
 
 @app.get("/health")
 async def health():
@@ -114,6 +117,7 @@ async def discover(pair_id: int):
             status_code=500, detail="Invalid JSON from discover_selectors.py"
         )
 
+
 @app.get("/config", response_model=SettingsStatusResponse)
 async def get_config():
     s = _db.get_settings_status()
@@ -134,7 +138,11 @@ async def get_config():
 @app.put("/config")
 async def update_config(payload: SettingsUpdateRequest):
     updates = {
-        "LLM_DISCOVERY_ENABLED": None if payload.llm_discovery_enabled is None else str(payload.llm_discovery_enabled).lower(),
+        "LLM_DISCOVERY_ENABLED": (
+            None
+            if payload.llm_discovery_enabled is None
+            else str(payload.llm_discovery_enabled).lower()
+        ),
         "LLM_MODE": payload.llm_mode,
         "SELECTOR_API_BASE": payload.selector_api_base,
         "SELECTOR_API_KEY": payload.selector_api_key,

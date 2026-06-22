@@ -199,6 +199,7 @@ def commit_to_db(pair_id: int, price_sel: str, stock_sel: str) -> None:
     db = DBWriter(engine, cipher=build_cipher_from_env())
     db.update_pair_selectors(pair_id, price_sel, stock_sel)
 
+
 # ---------------------------------------------------------------------------
 # Security step
 # ---------------------------------------------------------------------------
@@ -212,6 +213,7 @@ def _load_llm_config(db: DBWriter) -> dict:
         "api_key": settings["SELECTOR_API_KEY"],
         "model_name": settings["SELECTOR_MODEL"],
     }
+
 
 # ---------------------------------------------------------------------------
 # Core async run logic
@@ -242,9 +244,7 @@ async def _run(args) -> int:
         )
         return 1
 
-    extractor = Extractor(
-        llm_config
-    )
+    extractor = Extractor(llm_config)
 
     cleaned_html = extractor.clean_html(raw_html)
 

@@ -13,7 +13,9 @@ class SettingsCipher:
             raise ValueError("SettingsCipher requires a non-empty key")
         key = base64.urlsafe_b64decode(key_b64)
         if len(key) != 32:
-            raise ValueError("SETTINGS_ENCRYPTION_KEY must decode to exactly 32 bytes (AES-256)")
+            raise ValueError(
+                "SETTINGS_ENCRYPTION_KEY must decode to exactly 32 bytes (AES-256)"
+            )
         self._aesgcm = AESGCM(key)
 
     def encrypt(self, plaintext: str) -> str:

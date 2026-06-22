@@ -100,7 +100,10 @@ class Orchestrator:
 
     def is_llm_discovery_enabled(self) -> bool:
         """Reads LLM_DISCOVERY_ENABLED from settings; returns bool."""
-        return self.db_writer.get_settings()["LLM_DISCOVERY_ENABLED"].strip().lower() == "true"
+        return (
+            self.db_writer.get_settings()["LLM_DISCOVERY_ENABLED"].strip().lower()
+            == "true"
+        )
 
     def get_llm_mode(self) -> str:
         """Reads LLM_MODE from settings; returns 'direct' or 'selector'."""
