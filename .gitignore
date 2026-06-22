@@ -16,3 +16,9 @@ __pycache__/
 /scraper/logs
 
 /logs
+
+.coverage
+.coverage.*
+htmlcov/
+nshtmlcov/
+coverage.xml
