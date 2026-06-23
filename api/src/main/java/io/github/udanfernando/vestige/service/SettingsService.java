@@ -36,7 +36,7 @@ public class SettingsService {
         try {
             r = restClient.get().uri("/config").retrieve().body(ScraperSettingsResponse.class);
         } catch (RestClientResponseException e) {
-            throw new SettingsSyncException("Scraper service returned " + e.getStatusCode());
+            throw new SettingsSyncException("Scraper service returned " + e.getStatusCode(), e.getStatusCode());
         } catch (Exception e) {
             throw new SettingsSyncException("Could not reach scraper service: " + e.getMessage());
         }
@@ -68,7 +68,7 @@ public class SettingsService {
         try {
             restClient.put().uri("/config").body(body).retrieve().toBodilessEntity();
         } catch (RestClientResponseException e) {
-            throw new SettingsSyncException("Scraper service rejected the update (" + e.getStatusCode() + "): " + e.getResponseBodyAsString());
+            throw new SettingsSyncException("Scraper service rejected the update (" + e.getStatusCode() + "): " + e.getResponseBodyAsString(), e.getStatusCode());
         } catch (Exception e) {
             throw new SettingsSyncException("Could not reach scraper service: " + e.getMessage());
         }
