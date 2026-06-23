@@ -42,8 +42,8 @@ def _pair(
 
 class TestPathA:
     def test_no_url_selector_mode_disabled(self, orchestrator):
-            settings = {"LLM_MODE": "selector", "LLM_DISCOVERY_ENABLED": "false"}
-            assert orchestrator.determine_path(_pair(), settings) == "A"
+        settings = {"LLM_MODE": "selector", "LLM_DISCOVERY_ENABLED": "false"}
+        assert orchestrator.determine_path(_pair(), settings) == "A"
 
     def test_no_url_selector_mode_enabled(self, orchestrator):
         settings = {"LLM_MODE": "selector", "LLM_DISCOVERY_ENABLED": "true"}
@@ -113,9 +113,7 @@ class TestPathD:
         pair = _pair(product_url="https://sarasavi.lk/books/123")
         assert orchestrator.determine_path(pair, settings) == "D"
 
-    def test_path_d_discovery_enabled_irrelevant_in_direct_mode(
-        self, orchestrator
-    ):
+    def test_path_d_discovery_enabled_irrelevant_in_direct_mode(self, orchestrator):
         # LLM_DISCOVERY_ENABLED only affects Path B (selector mode)
         settings = {"LLM_MODE": "direct", "LLM_DISCOVERY_ENABLED": "true"}
         pair = _pair(product_url="https://sarasavi.lk/books/123")

@@ -100,10 +100,7 @@ class Orchestrator:
 
     def is_llm_discovery_enabled(self, settings: dict) -> bool:
         """Reads LLM_DISCOVERY_ENABLED from settings; returns bool."""
-        return (
-            settings["LLM_DISCOVERY_ENABLED"].strip().lower()
-            == "true"
-        )
+        return settings["LLM_DISCOVERY_ENABLED"].strip().lower() == "true"
 
     def get_llm_mode(self, settings: dict) -> str:
         """Reads LLM_MODE from settings; returns 'direct' or 'selector'."""

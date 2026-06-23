@@ -70,7 +70,7 @@ class TestPathB:
             "LLM_MODE": "selector",
             "LLM_DISCOVERY_ENABLED": "true",
             "SELECTOR_API_BASE": "https://example.test/v1",
-            "SELECTOR_MODEL": "test-model"
+            "SELECTOR_MODEL": "test-model",
         }
 
         orchestrator = Orchestrator(db_writer=db_writer)
@@ -109,7 +109,9 @@ class TestPathB:
                     "pipeline.orchestrator.BrowserSession",
                     return_value=mock_browser_session,
                 ):
-                    await orchestrator.run_pair(seeded_pair_b, path="B", settings=mock_settings)
+                    await orchestrator.run_pair(
+                        seeded_pair_b, path="B", settings=mock_settings
+                    )
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
         assert updated["status"] == "PENDING"
@@ -131,14 +133,14 @@ class TestPathB:
             "LLM_DISCOVERY_ENABLED": "true",
             "DIRECT_API_BASE": "https://example.test/v1",
             "DIRECT_MODEL": "test-model",
-            "DIRECT_API_KEY": "test-key"
+            "DIRECT_API_KEY": "test-key",
         }
 
         mock_llm_response = {
             "price": "Rs. 3,580",
             "stock_status": "In Stock",
             "description": None,
-            "isbn": None
+            "isbn": None,
         }
 
         orchestrator = Orchestrator(db_writer=db_writer)

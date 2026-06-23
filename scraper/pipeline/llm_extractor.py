@@ -241,7 +241,9 @@ class Extractor:
             return {"error": "LLM endpoint returned an empty choices array."}
 
         resolved_model = getattr(response, "model", "Unknown Fallback Model")
-        print(f"[LLM] {self.model_name} -> resolved to: {resolved_model}", file=sys.stderr)
+        print(
+            f"[LLM] {self.model_name} -> resolved to: {resolved_model}", file=sys.stderr
+        )
 
         raw_content = response.choices[0].message.content
         if not raw_content:
