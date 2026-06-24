@@ -98,6 +98,11 @@ async def _scheduler_tick():
 
     settings = _db.get_settings()
     interval_hours = _parse_interval(settings.get("SCRAPE_INTERVAL_HOURS", ""))
+    logger.warning(
+        "SCHEDULER DIAGNOSTIC: tick fired, interval_hours=%s last_run_at=%s",
+        interval_hours,
+        _last_run_at,
+    )
     if interval_hours is None:
         return
 
@@ -134,6 +139,9 @@ async def _scheduler_loop():
 async def lifespan(app: FastAPI):
     global _last_run_at
     _last_run_at = _seed_last_run_at()
+    logger.warning(
+        "SCHEDULER DIAGNOSTIC: loop starting, seeded last_run_at=%s", _last_run_at
+    )
     task = asyncio.create_task(_scheduler_loop())
     try:
         yield
