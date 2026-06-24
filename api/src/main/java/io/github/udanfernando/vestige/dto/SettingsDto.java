@@ -14,4 +14,5 @@ public class SettingsDto {
     private boolean directApiKeyConfigured;
     private String directApiKeyHint;
     private String directModel;
+    private Integer scrapeIntervalHours; // null = disabled
 }

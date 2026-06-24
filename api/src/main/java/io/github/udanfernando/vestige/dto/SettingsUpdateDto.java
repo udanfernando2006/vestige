@@ -12,4 +12,5 @@ public class SettingsUpdateDto {
     private String directApiBase;
     private String directApiKey;
     private String directModel;
+    private Integer scrapeIntervalHours; // null = no change; 0 = disable; >0 = set
 }

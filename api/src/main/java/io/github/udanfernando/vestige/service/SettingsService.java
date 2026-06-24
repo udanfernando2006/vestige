@@ -51,6 +51,7 @@ public class SettingsService {
                 .directApiKeyConfigured(r.isDirectApiKeyConfigured())
                 .directApiKeyHint(r.getDirectApiKeyHint())
                 .directModel(r.getDirectModel())
+                .scrapeIntervalHours(r.getScrapeIntervalHours())
                 .build();
     }
 
@@ -64,6 +65,7 @@ public class SettingsService {
                 .directApiBase(dto.getDirectApiBase())
                 .directApiKey(dto.getDirectApiKey())
                 .directModel(dto.getDirectModel())
+                .scrapeIntervalHours(dto.getScrapeIntervalHours())
                 .build();
         try {
             restClient.put().uri("/config").body(body).retrieve().toBodilessEntity();

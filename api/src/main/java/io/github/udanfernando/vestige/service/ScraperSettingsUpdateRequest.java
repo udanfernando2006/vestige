@@ -28,4 +28,8 @@ class ScraperSettingsUpdateRequest {
 
     @JsonProperty("direct_model")
     private String directModel;
+
+    @JsonProperty("scrape_interval_hours")
+    private Integer scrapeIntervalHours;
+
 }
