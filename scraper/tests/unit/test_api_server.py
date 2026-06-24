@@ -4,6 +4,7 @@ import sys
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
+from api_server import _parse_interval
 
 # Pre-set environment variables before importing api_server to avoid module-load failures.
 # Using an in-memory SQLite URL ensures that SQLAlchemy's create_engine and
@@ -237,3 +238,52 @@ def test_update_config_handles_none_values():
 
         if mock_single_update.called:
             mock_single_update.assert_any_call("LLM_DISCOVERY_ENABLED", None)
+
+def test_parse_interval_utility():
+    """Verify interval parsing logic for numbers, garbage input, and empty values."""
+    assert _parse_interval("12") == 12
+    assert _parse_interval("") is None
+    assert _parse_interval("0") is None
+    assert _parse_interval("-5") is None
+    assert _parse_interval("not_an_integer") is None
+
+
+def test_get_config_includes_scrape_interval():
+    """Verify GET /config transforms and returns the scrape_interval_hours field."""
+    mock_status = {
+        "LLM_DISCOVERY_ENABLED": "true",
+        "LLM_MODE": "direct",
+        "SELECTOR_API_BASE": "http://selector",
+        "SELECTOR_API_KEY": {"configured": True, "hint": "abc"},
+        "SELECTOR_MODEL": "gpt-4",
+        "DIRECT_API_BASE": "http://direct",
+        "DIRECT_API_KEY": {"configured": False, "hint": None},
+        "DIRECT_MODEL": "gpt-5",
+        "SCRAPE_INTERVAL_HOURS": "8",
+    }
+    with patch("api_server._db.get_settings_status", return_value=mock_status):
+        response = client.get("/config")
+        assert response.status_code == 200
+        assert response.json()["scrape_interval_hours"] == 8
+
+
+def test_update_config_scrape_interval_bounds():
+    """Verify validation boundary limits and sentinel conversions on PUT /config."""
+    # Case A: Valid positive interval value
+    payload_valid = {"scrape_interval_hours": 6}
+    with patch("api_server._db.apply_setting_update") as mock_update:
+        response = client.put("/config", json=payload_valid)
+        assert response.status_code == 200
+        mock_update.assert_any_call("SCRAPE_INTERVAL_HOURS", "6")
+
+    # Case B: Sentinel value 0 (Explicitly Disable) translates to empty string
+    payload_disable = {"scrape_interval_hours": 0}
+    with patch("api_server._db.apply_setting_update") as mock_update:
+        response = client.put("/config", json=payload_disable)
+        assert response.status_code == 200
+        mock_update.assert_any_call("SCRAPE_INTERVAL_HOURS", "")
+
+    # Case C: Invalid negative value rejected at Pydantic gateway layer
+    payload_invalid = {"scrape_interval_hours": -4}
+    response = client.put("/config", json=payload_invalid)
+    assert response.status_code == 422  # Unprocessable Entity

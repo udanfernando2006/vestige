@@ -44,6 +44,7 @@ class SettingsControllerTest {
                 .directApiKeyConfigured(false)
                 .directApiKeyHint(null)
                 .directModel("gpt-4o-mini")
+                .scrapeIntervalHours(6)
                 .build();
 
         when(settingsService.getSettings()).thenReturn(mockSettings);
@@ -60,7 +61,8 @@ class SettingsControllerTest {
                 .andExpect(jsonPath("$.directApiBase").value("https://api.openai.com/v1"))
                 .andExpect(jsonPath("$.directApiKeyConfigured").value(false))
                 .andExpect(jsonPath("$.directApiKeyHint").isEmpty())
-                .andExpect(jsonPath("$.directModel").value("gpt-4o-mini"));
+                .andExpect(jsonPath("$.directModel").value("gpt-4o-mini"))
+                .andExpect(jsonPath("$.scrapeIntervalHours").value(6));
 
         verify(settingsService, times(1)).getSettings();
     }
@@ -71,6 +73,7 @@ class SettingsControllerTest {
                 .llmDiscoveryEnabled(false)
                 .llmMode("direct")
                 .directModel("gpt-4o")
+                .scrapeIntervalHours(4)
                 .build();
 
         doNothing().when(settingsService).updateSettings(any(SettingsUpdateDto.class));

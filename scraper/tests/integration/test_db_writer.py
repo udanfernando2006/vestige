@@ -322,3 +322,20 @@ class TestSettings:
             RuntimeError, match="SETTINGS_ENCRYPTION_KEY isn't configured"
         ):
             db_writer.apply_setting_update("SELECTOR_API_KEY", "prohibited-write")
+
+    def test_scrape_interval_hours_plaintext_flow(self, db_writer):
+        """Verifies that SCRAPE_INTERVAL_HOURS flows as a plaintext configuration value."""
+        # 1. Test setting a value through apply_setting_update
+        db_writer.apply_setting_update("SCRAPE_INTERVAL_HOURS", "12")
+        assert db_writer.get_settings()["SCRAPE_INTERVAL_HOURS"] == "12"
+        
+        # 2. Test status retrieval
+        status = db_writer.get_settings_status()
+        assert "SCRAPE_INTERVAL_HOURS" in status
+        assert status["SCRAPE_INTERVAL_HOURS"] == "12"
+        
+        # 3. Test explicit clear via empty string (triggers fallback cascading)
+        with patch.dict(os.environ, {"SCRAPE_INTERVAL_HOURS": ""}):
+            db_writer.apply_setting_update("SCRAPE_INTERVAL_HOURS", "")
+            settings = db_writer.get_settings()
+            assert settings.get("SCRAPE_INTERVAL_HOURS", "") == ""
