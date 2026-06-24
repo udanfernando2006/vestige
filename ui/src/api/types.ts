@@ -132,6 +132,7 @@ export interface SettingsDto {
     directApiKeyConfigured: boolean;
     directApiKeyHint?: string;
     directModel: string;
+    scrapeIntervalHours?: number;   // absent = disabled (NON_NULL omits it, same as other optional fields)
 }
 
 export interface SettingsUpdateDto {
@@ -143,4 +144,5 @@ export interface SettingsUpdateDto {
     directApiBase?: string;
     directApiKey?: string;
     directModel?: string;
+    scrapeIntervalHours?: number;
 }

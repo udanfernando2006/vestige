@@ -23,6 +23,7 @@ export default function Settings() {
     const [draft, setDraft] = useState({
         llmDiscoveryEnabled: false,
         llmMode: "direct",
+        scrapeIntervalHours: "" as number | "", // '' renders as a blank box, means disabled
         selectorApiBase: "",
         selectorApiKey: "", // secret fields start blank — never pre-filled with the real value
         selectorModel: "",
@@ -40,6 +41,7 @@ export default function Settings() {
                     ...d,
                     llmDiscoveryEnabled: s.llmDiscoveryEnabled,
                     llmMode: s.llmMode,
+                    scrapeIntervalHours: s.scrapeIntervalHours ?? "",
                     selectorApiBase: s.selectorApiBase,
                     selectorApiKey: "",
                     selectorModel: s.selectorModel,
@@ -91,6 +93,12 @@ export default function Settings() {
             const update: SettingsUpdateDto = {
                 llmDiscoveryEnabled: draft.llmDiscoveryEnabled,
                 llmMode: draft.llmMode,
+                // '' means disabled — send 0, which the scraper service converts
+                // into an explicit "" clear on the SCRAPE_INTERVAL_HOURS override.
+                scrapeIntervalHours:
+                    draft.scrapeIntervalHours === ""
+                        ? 0
+                        : draft.scrapeIntervalHours,
                 selectorApiBase: draft.selectorApiBase,
                 selectorModel: draft.selectorModel,
                 directApiBase: draft.directApiBase,
@@ -203,6 +211,32 @@ export default function Settings() {
                             />
                             Run selector discovery automatically in the pipeline
                         </label>
+
+                        <h4>Automation</h4>
+                        <label>
+                            Run scraper automatically every (hours)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="Disabled"
+                                value={draft.scrapeIntervalHours}
+                                onChange={(e) =>
+                                    setDraft({
+                                        ...draft,
+                                        scrapeIntervalHours:
+                                            e.target.value === ""
+                                                ? ""
+                                                : Number(e.target.value),
+                                    })
+                                }
+                            />
+                        </label>
+                        <p className="muted">
+                            Checked roughly once a minute — actual run time may
+                            drift slightly from the exact hour mark. Leave blank
+                            to disable.
+                        </p>
 
                         <h4>Selector discovery (Path B)</h4>
                         <label>
