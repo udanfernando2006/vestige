@@ -4,7 +4,6 @@ import sys
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
-from api_server import _parse_interval
 
 # Pre-set environment variables before importing api_server to avoid module-load failures.
 # Using an in-memory SQLite URL ensures that SQLAlchemy's create_engine and
@@ -15,7 +14,7 @@ _original_db_url = os.environ.get("DATABASE_URL")
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 # 2. Import the application while the SQLite environment variable is active
-from api_server import app, _run_lock  # noqa: E402
+from api_server import app, _run_lock, _parse_interval  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 import httpx2  # noqa: E402
 
