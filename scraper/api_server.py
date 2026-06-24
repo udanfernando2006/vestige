@@ -41,6 +41,7 @@ logger = logging.getLogger("uvicorn.error")
 _last_run_at: Optional[datetime] = None
 SCHEDULER_POLL_SECONDS = 60
 
+
 def _parse_interval(raw: str) -> Optional[int]:
     """Returns the configured interval in hours, or None if disabled/unset/garbage.
     Defensive on purpose — a hand-edited or stale setting_overrides row shouldn't
@@ -55,8 +56,8 @@ def _parse_interval(raw: str) -> Optional[int]:
         )
         return None
     return value if value > 0 else None
- 
- 
+
+
 def _seed_last_run_at() -> Optional[datetime]:
     """Reads the most recent run log on startup so a container restart doesn't
     immediately re-trigger a run that already happened minutes ago. Best-effort:
@@ -72,10 +73,12 @@ def _seed_last_run_at() -> Optional[datetime]:
             return None
         return datetime.fromisoformat(run_id.replace("Z", "+00:00"))
     except Exception:
-        logger.exception("Could not seed last-run time from log history; starting fresh")
+        logger.exception(
+            "Could not seed last-run time from log history; starting fresh"
+        )
         return None
- 
- 
+
+
 async def _execute_run():
     """The one place a pipeline run actually happens and _last_run_at is recorded.
     Both POST /run and the scheduler go through this, so the schedule is always
@@ -84,25 +87,27 @@ async def _execute_run():
     async with _run_lock:
         await run_once(_db, _orchestrator)
         _last_run_at = datetime.now(timezone.utc)
- 
- 
+
+
 async def _scheduler_tick():
     if _run_lock.locked():
         # A manual run is already in flight — skip this tick. _execute_run()
         # updates _last_run_at when that run finishes, so the next tick's
         # due-check naturally accounts for it. No queuing needed.
         return
- 
+
     settings = _db.get_settings()
     interval_hours = _parse_interval(settings.get("SCRAPE_INTERVAL_HOURS", ""))
     if interval_hours is None:
         return
- 
+
     now = datetime.now(timezone.utc)
-    due = _last_run_at is None or (now - _last_run_at) >= timedelta(hours=interval_hours)
+    due = _last_run_at is None or (now - _last_run_at) >= timedelta(
+        hours=interval_hours
+    )
     if not due:
         return
- 
+
     logger.info(
         "Scheduled interval elapsed (every %sh, last run %s) — starting scrape run",
         interval_hours,
@@ -112,8 +117,8 @@ async def _scheduler_tick():
         await _execute_run()
     except Exception:
         logger.exception("Scheduled scrape run failed")
- 
- 
+
+
 async def _scheduler_loop():
     while True:
         await asyncio.sleep(SCHEDULER_POLL_SECONDS)
@@ -123,8 +128,8 @@ async def _scheduler_loop():
             # Belt-and-suspenders on top of _scheduler_tick's own try/except —
             # nothing here should ever be able to kill the loop permanently.
             logger.exception("Scheduler tick raised unexpectedly")
- 
- 
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _last_run_at
@@ -139,6 +144,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Vestige Scraper Service")
+
 
 class SettingsStatusResponse(BaseModel):
     llm_discovery_enabled: bool
@@ -168,7 +174,6 @@ class SettingsUpdateRequest(BaseModel):
     scrape_interval_hours: Optional[int] = Field(default=None, ge=0)
 
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -184,7 +189,6 @@ async def run_pipeline():
     except Exception as e:
         logger.exception("Pipeline run failed")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @app.post("/discover/{pair_id}")
@@ -270,7 +274,6 @@ async def update_config(payload: SettingsUpdateRequest):
                 else str(payload.scrape_interval_hours)
             )
         ),
-
     }
     try:
         for key, value in updates.items():

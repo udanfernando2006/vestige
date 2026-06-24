@@ -239,6 +239,7 @@ def test_update_config_handles_none_values():
         if mock_single_update.called:
             mock_single_update.assert_any_call("LLM_DISCOVERY_ENABLED", None)
 
+
 def test_parse_interval_utility():
     """Verify interval parsing logic for numbers, garbage input, and empty values."""
     assert _parse_interval("12") == 12
