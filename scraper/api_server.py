@@ -151,7 +151,7 @@ async def lifespan(app: FastAPI):
             await task
 
 
-app = FastAPI(title="Vestige Scraper Service")
+app = FastAPI(title="Vestige Scraper Service", lifespan=lifespan)
 
 
 class SettingsStatusResponse(BaseModel):
