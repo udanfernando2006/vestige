@@ -5,10 +5,10 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { getRuns, getRunDetail } from "./client";
-import type { RunChangeDto } from "./types";
+import type { RunChangeDto, RunSummaryDto } from "./types";
 
 const store = new LazyStore("settings.json");
-const POLL_INTERVAL_MS = 90_000; // slower than the scheduler's 60s tick — no reason to poll faster than a run can complete
+const POLL_INTERVAL_MS = 90_000;
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let permissionGranted = false;
@@ -22,7 +22,19 @@ async function ensurePermission(): Promise<boolean> {
     return permissionGranted;
 }
 
-function formatChange(c: RunChangeDto): string {
+// Pure — no I/O. `runs` must be newest-first (what getRuns() already returns).
+// Returns the runs to notify for, oldest-first, so toasts land in order.
+export function selectNewRuns(
+    runs: RunSummaryDto[],
+    lastNotifiedRunId: string | null,
+): RunSummaryDto[] {
+    if (runs.length === 0) return [];
+    if (lastNotifiedRunId === null) return [runs[0]]; // first poll ever — only the latest, not all history
+    return runs.filter((r) => r.runId > lastNotifiedRunId).reverse(); // ISO-8601 sorts lexically
+}
+
+// Pure — no I/O.
+export function formatChange(c: RunChangeDto): string {
     const statusChanged = !!c.fromStatus && c.fromStatus !== c.toStatus;
     const priceChanged =
         c.fromPrice != null && c.toPrice != null && c.fromPrice !== c.toPrice;
@@ -40,7 +52,6 @@ function notifyForChanges(changes: RunChangeDto[]) {
     if (changes.length === 0) return;
     const lines = changes.slice(0, 3).map(formatChange);
     const more = changes.length > 3 ? `\n+${changes.length - 3} more` : "";
-
     sendNotification({
         title:
             changes.length === 1
@@ -50,28 +61,23 @@ function notifyForChanges(changes: RunChangeDto[]) {
     });
 }
 
-async function pollOnce() {
+export async function pollOnce() {
     if (!(await ensurePermission())) return;
 
     const lastNotifiedRunId =
         (await store.get<string>("lastNotifiedRunId")) ?? null;
 
-    let runs;
+    let runs: RunSummaryDto[];
     try {
-        runs = await getRuns(); // newest-first, per RunService.getRecentRuns()
+        runs = await getRuns();
     } catch {
-        return; // backend unreachable this tick — try again next poll
+        return;
     }
     if (runs.length === 0) return;
 
-    // First time ever: only the latest run, not the entire history.
-    // Otherwise: every run strictly newer than the last one we've notified for.
-    const newRuns = lastNotifiedRunId
-        ? runs.filter((r) => r.runId > lastNotifiedRunId) // ISO-8601 strings sort correctly lexically
-        : [runs[0]];
+    const newRuns = selectNewRuns(runs, lastNotifiedRunId);
 
-    for (const run of newRuns.reverse()) {
-        // oldest-first, so toasts appear in chronological order
+    for (const run of newRuns) {
         try {
             const detail = await getRunDetail(run.runId);
             notifyForChanges(detail.changes);
@@ -80,12 +86,14 @@ async function pollOnce() {
         }
     }
 
-    await store.set("lastNotifiedRunId", runs[0].runId);
-    await store.save();
+    if (newRuns.length > 0) {
+        await store.set("lastNotifiedRunId", runs[0].runId);
+        await store.save();
+    }
 }
 
 export function startNotificationPolling() {
-    if (pollHandle) return; // idempotent — guards against React StrictMode's double-mount in dev
+    if (pollHandle) return;
     pollOnce();
     pollHandle = setInterval(pollOnce, POLL_INTERVAL_MS);
 }
