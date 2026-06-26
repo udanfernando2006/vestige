@@ -60,36 +60,18 @@ class Orchestrator:
                 pair_summary["status"] = availability.status
 
                 # Detect changes
-                if last is not None:
-                    status_changed = last["in_stock"] != availability.in_stock
-                    price_changed = (
-                        last["price"] is not None
-                        and availability.price is not None
-                        and round(float(last["price"]), 2)
-                        != round(float(availability.price), 2)
+                change = self._detect_change(last, availability)
+                if change is not None:
+                    pair_summary["changed"] = True
+                    changes.append(
+                        {
+                            "pair_id": pair["id"],
+                            "book_name": pair["book_name"],
+                            "store_name": pair["store_name"],
+                            "product_url": pair.get("product_url"),
+                            **change,
+                        }
                     )
-                    if status_changed or price_changed:
-                        pair_summary["changed"] = True
-                        changes.append(
-                            {
-                                "pair_id": pair["id"],
-                                "book_name": pair["book_name"],
-                                "store_name": pair["store_name"],
-                                "from_status": last["status"],
-                                "to_status": availability.status,
-                                "from_price": (
-                                    round(float(last["price"]), 2)
-                                    if last["price"] is not None
-                                    else None
-                                ),
-                                "to_price": (
-                                    round(float(availability.price), 2)
-                                    if availability.price is not None
-                                    else None
-                                ),
-                                "product_url": pair.get("product_url"),
-                            }
-                        )
             elif result.get("status") == "NEEDS_SETUP":
                 pass  # DBWriter already updated status; just record it
 
@@ -188,6 +170,44 @@ class Orchestrator:
                 summary["errors"] += 1
 
         return summary
+
+    def _detect_change(
+        self, last: dict | None, availability: AvailabilityResult
+    ) -> dict | None:
+        """
+        Compares `availability` against `last` (the previous snapshot dict
+        from DBWriter.get_last_snapshot(), or None on a pair's first-ever
+        snapshot). Returns a change record if status or price differs, else
+        None.
+
+        A first-ever snapshot is never reported as a change — there's nothing
+        to diff against, and reporting it as one would notify on every newly
+        added book the moment it's first scraped.
+        """
+        if last is None:
+            return None
+
+        status_changed = last["in_stock"] != availability.in_stock
+        price_changed = (
+            last["price"] is not None
+            and availability.price is not None
+            and round(float(last["price"]), 2) != round(float(availability.price), 2)
+        )
+        if not status_changed and not price_changed:
+            return None
+
+        return {
+            "from_status": last["status"],
+            "to_status": availability.status,
+            "from_price": (
+                round(float(last["price"]), 2) if last["price"] is not None else None
+            ),
+            "to_price": (
+                round(float(availability.price), 2)
+                if availability.price is not None
+                else None
+            ),
+        }
 
     async def _run_pair_path_a(
         self, pair: TrackingPair, session: BrowserSession, settings: dict
