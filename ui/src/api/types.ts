@@ -109,6 +109,25 @@ export interface RunSummaryDto {
     logPath?: string; // only populated by GET /api/runs
 }
 
+export interface RunChangeDto {
+    pairId: number;
+    bookName: string;
+    storeName: string;
+    fromStatus?: string;
+    toStatus: string;
+    fromPrice?: number;
+    toPrice?: number;
+    productUrl?: string;
+}
+
+export interface RunDetailDto {
+    runId: string;
+    totalPairs: number;
+    errors: number;
+    durationSeconds: number;
+    changes: RunChangeDto[];
+}
+
 export interface DiscoverResultDto {
     pairId: number;
     priceSelector?: string;
@@ -132,7 +151,7 @@ export interface SettingsDto {
     directApiKeyConfigured: boolean;
     directApiKeyHint?: string;
     directModel: string;
-    scrapeIntervalHours?: number;   // absent = disabled (NON_NULL omits it, same as other optional fields)
+    scrapeIntervalHours?: number; // absent = disabled (NON_NULL omits it, same as other optional fields)
 }
 
 export interface SettingsUpdateDto {

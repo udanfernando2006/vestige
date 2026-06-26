@@ -60,16 +60,36 @@ class Orchestrator:
                 pair_summary["status"] = availability.status
 
                 # Detect changes
-                prev_status = last["status"] if last else None
-                if last is None or last["in_stock"] != availability.in_stock:
-                    pair_summary["changed"] = True
-                    changes.append(
-                        {
-                            "pair_id": pair["id"],
-                            "from": prev_status,
-                            "to": availability.status,
-                        }
+                if last is not None:
+                    status_changed = last["in_stock"] != availability.in_stock
+                    price_changed = (
+                        last["price"] is not None
+                        and availability.price is not None
+                        and round(float(last["price"]), 2)
+                        != round(float(availability.price), 2)
                     )
+                    if status_changed or price_changed:
+                        pair_summary["changed"] = True
+                        changes.append(
+                            {
+                                "pair_id": pair["id"],
+                                "book_name": pair["book_name"],
+                                "store_name": pair["store_name"],
+                                "from_status": last["status"],
+                                "to_status": availability.status,
+                                "from_price": (
+                                    round(float(last["price"]), 2)
+                                    if last["price"] is not None
+                                    else None
+                                ),
+                                "to_price": (
+                                    round(float(availability.price), 2)
+                                    if availability.price is not None
+                                    else None
+                                ),
+                                "product_url": pair.get("product_url"),
+                            }
+                        )
             elif result.get("status") == "NEEDS_SETUP":
                 pass  # DBWriter already updated status; just record it
 
@@ -150,7 +170,7 @@ class Orchestrator:
     def collect_run_summary(self, results: List[Dict[str, Any]]) -> dict:
         """Aggregates all results, including a list of skipped pairs due to NEEDS_SETUP."""
         summary = {
-            "total": len(results),
+            "total_pairs": len(results),
             "completed": 0,
             "errors": 0,
             "needs_setup": [],

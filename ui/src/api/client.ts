@@ -11,9 +11,10 @@ import type {
     AvailabilityDto,
     SnapshotHistoryDto,
     RunSummaryDto,
+    RunDetailDto,
     DiscoverResultDto,
     SettingsDto,
-    SettingsUpdateDto
+    SettingsUpdateDto,
 } from "./types";
 
 export class ApiError extends Error {
@@ -133,6 +134,10 @@ export function getHistory(
 
 export function getRuns(): Promise<RunSummaryDto[]> {
     return request("/api/runs");
+}
+
+export function getRunDetail(runId: string): Promise<RunDetailDto> {
+    return request(`/api/runs/${encodeURIComponent(runId)}`);
 }
 
 export function triggerRun(): Promise<RunSummaryDto> {

@@ -6,6 +6,7 @@ import Tracking from "./pages/Tracking";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
 import { checkHealth } from "./api/client";
+import { startNotificationPolling, stopNotificationPolling } from "./api/notifications";
 
 type Page =
     | "dashboard"
@@ -47,6 +48,11 @@ export default function App() {
     useEffect(() => {
         probe();
     }, [probe]);
+
+    useEffect(() => {
+        startNotificationPolling();
+        return () => stopNotificationPolling();
+    }, []);
 
     // Settings must always be reachable, even before the backend is up or if the
     // configured URL is wrong — otherwise there's no way to fix it from the UI.
