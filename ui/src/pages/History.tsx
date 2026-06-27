@@ -1,31 +1,49 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { getBooks, getHistory } from "../api/client";
-import type { BookGroupDto, SnapshotHistoryDto } from "../api/types";
+import { useEffect, useState, useCallback } from "react";
+import {
+    getBooks,
+    getStores,
+    getHistory,
+    deleteSnapshot,
+    deleteHistoryForPair,
+} from "../api/client";
+import type { BookGroupDto, StoreDto, SnapshotHistoryDto } from "../api/types";
 import AvailabilityBadge from "../components/AvailabilityBadge";
 
 export default function History() {
     const [bookGroups, setBookGroups] = useState<BookGroupDto[]>([]);
+    const [stores, setStores] = useState<StoreDto[]>([]);
     const [isbn, setIsbn] = useState("");
-    const [snapshots, setSnapshots] = useState<SnapshotHistoryDto[]>([]);
     const [storeFilter, setStoreFilter] = useState("");
-    const [loading, setLoading] = useState(false);
+    const [statusFilter, setStatusFilter] = useState("");
+    const [snapshots, setSnapshots] = useState<SnapshotHistoryDto[]>([]);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Store options come from a dedicated fetch, not derived from the current
+    // (possibly already store-filtered) snapshot list — deriving them from
+    // snapshots would make the dropdown's own option list shrink to match
+    // whatever's currently selected, locking out switching back to a different store.
     useEffect(() => {
         getBooks()
             .then(setBookGroups)
             .catch((err) => setError(err.message));
+        getStores()
+            .then(setStores)
+            .catch((err) => setError(err.message));
     }, []);
 
-    const loadHistory = useCallback(async (selectedIsbn: string) => {
-        if (!selectedIsbn) {
-            setSnapshots([]);
-            return;
-        }
+    const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            setSnapshots(await getHistory(selectedIsbn, 100));
+            setSnapshots(
+                await getHistory({
+                    isbn: isbn || undefined,
+                    storeName: storeFilter || undefined,
+                    status: statusFilter || undefined,
+                    limit: 100,
+                }),
+            );
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : "Failed to load history",
@@ -33,20 +51,55 @@ export default function History() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isbn, storeFilter, statusFilter]);
 
+    // Loads on mount with no filters — every recent snapshot across every book —
+    // and again whenever a filter changes. Filtering happens server-side via the
+    // generalized /api/availability/history endpoint, not by slicing an
+    // already-fetched array client-side.
     useEffect(() => {
-        loadHistory(isbn);
-    }, [isbn, loadHistory]);
+        load();
+    }, [load]);
 
-    const storeNames = useMemo(
-        () => [...new Set(snapshots.map((s) => s.storeName))],
-        [snapshots],
-    );
-    const filtered = storeFilter
-        ? snapshots.filter((s) => s.storeName === storeFilter)
-        : snapshots;
     const books = bookGroups.flatMap((g) => g.books);
+
+    async function handleDeleteSnapshot(id: number) {
+        const confirmed = window.confirm(
+            "Delete this snapshot? This cannot be undone.",
+        );
+        if (!confirmed) return;
+        try {
+            await deleteSnapshot(id);
+            await load();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to delete snapshot",
+            );
+        }
+    }
+
+    async function handleDeletePairHistory(
+        pairId: number,
+        bookName: string,
+        storeName: string,
+    ) {
+        const confirmed = window.confirm(
+            `Delete ALL history for ${bookName} at ${storeName}? This cannot be undone.`,
+        );
+        if (!confirmed) return;
+        try {
+            await deleteHistoryForPair(pairId);
+            await load();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to delete history for this pair",
+            );
+        }
+    }
 
     return (
         <div className="page">
@@ -58,11 +111,8 @@ export default function History() {
                     Book
                     <select
                         value={isbn}
-                        onChange={(e) => {
-                            setIsbn(e.target.value);
-                            setStoreFilter("");
-                        }}>
-                        <option value="">Select a book…</option>
+                        onChange={(e) => setIsbn(e.target.value)}>
+                        <option value="">All books</option>
                         {books.map((b) => (
                             <option key={b.isbn} value={b.isbn}>
                                 {b.name}
@@ -70,21 +120,31 @@ export default function History() {
                         ))}
                     </select>
                 </label>
-                {storeNames.length > 1 && (
-                    <label>
-                        Store
-                        <select
-                            value={storeFilter}
-                            onChange={(e) => setStoreFilter(e.target.value)}>
-                            <option value="">All stores</option>
-                            {storeNames.map((s) => (
-                                <option key={s} value={s}>
-                                    {s}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                )}
+                <label>
+                    Store
+                    <select
+                        value={storeFilter}
+                        onChange={(e) => setStoreFilter(e.target.value)}>
+                        <option value="">All stores</option>
+                        {stores.map((s) => (
+                            <option key={s.id} value={s.name}>
+                                {s.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label>
+                    Status
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}>
+                        <option value="">All statuses</option>
+                        <option value="IN_STOCK">In stock</option>
+                        <option value="OUT_OF_STOCK">Out of stock</option>
+                        <option value="NOT_LISTED">Not listed</option>
+                        <option value="ERROR">Error</option>
+                    </select>
+                </label>
             </div>
 
             <div className="card">
@@ -94,15 +154,18 @@ export default function History() {
                     <table>
                         <thead>
                             <tr>
+                                <th>Book</th>
                                 <th>Store</th>
                                 <th>Status</th>
                                 <th>Price</th>
                                 <th>Scraped at</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map((s, i) => (
-                                <tr key={`${s.storeName}-${s.scrapedAt}-${i}`}>
+                            {snapshots.map((s) => (
+                                <tr key={s.id}>
+                                    <td>{s.bookName}</td>
                                     <td>{s.storeName}</td>
                                     <td>
                                         <AvailabilityBadge status={s.status} />
@@ -115,12 +178,32 @@ export default function History() {
                                     <td>
                                         {new Date(s.scrapedAt).toLocaleString()}
                                     </td>
+                                    <td>
+                                        <button
+                                            className="link-button"
+                                            onClick={() =>
+                                                handleDeleteSnapshot(s.id)
+                                            }>
+                                            Delete
+                                        </button>
+                                        <button
+                                            className="link-button"
+                                            onClick={() =>
+                                                handleDeletePairHistory(
+                                                    s.pairId,
+                                                    s.bookName,
+                                                    s.storeName,
+                                                )
+                                            }>
+                                            Delete all for this pair
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
-                            {filtered.length === 0 && isbn && (
+                            {snapshots.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="muted">
-                                        No history yet for this book.
+                                    <td colSpan={6} className="muted">
+                                        No history matches these filters.
                                     </td>
                                 </tr>
                             )}

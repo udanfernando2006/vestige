@@ -5,11 +5,13 @@ import type {
     BookDto,
     StoreDto,
     StoreCreateDto,
+    StoreUpdateDto,
     TrackingPairDto,
     TrackingPairCreateDto,
     TrackingPairUpdateDto,
     AvailabilityDto,
     SnapshotHistoryDto,
+    HistoryQuery,
     RunSummaryDto,
     RunDetailDto,
     DiscoverResultDto,
@@ -88,6 +90,20 @@ export function createStore(dto: StoreCreateDto): Promise<StoreDto> {
     });
 }
 
+export function updateStore(
+    id: number,
+    dto: StoreUpdateDto,
+): Promise<StoreDto> {
+    return request(`/api/stores/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function deleteStore(id: number): Promise<void> {
+    return request(`/api/stores/${id}`, { method: "DELETE" });
+}
+
 // ---- Tracking ----
 
 export function getTracking(): Promise<TrackingPairDto[]> {
@@ -124,10 +140,22 @@ export function getAvailability(): Promise<AvailabilityDto[]> {
 }
 
 export function getHistory(
-    isbn: string,
-    limit = 50,
+    query: HistoryQuery = {},
 ): Promise<SnapshotHistoryDto[]> {
-    return request(`/api/availability/history/${isbn}?limit=${limit}`);
+    const params = new URLSearchParams();
+    if (query.isbn) params.set("isbn", query.isbn);
+    if (query.storeName) params.set("storeName", query.storeName);
+    if (query.status) params.set("status", query.status);
+    params.set("limit", String(query.limit ?? 100));
+    return request(`/api/availability/history?${params.toString()}`);
+}
+
+export function deleteSnapshot(id: number): Promise<void> {
+    return request(`/api/availability/${id}`, { method: "DELETE" });
+}
+
+export function deleteHistoryForPair(pairId: number): Promise<void> {
+    return request(`/api/availability/pair/${pairId}`, { method: "DELETE" });
 }
 
 // ---- Runs ----

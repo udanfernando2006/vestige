@@ -36,11 +36,18 @@ export interface StoreDto {
     id: number;
     name: string;
     baseUrl: string;
+    searchUrlTemplate?: string; // absent = undiscovered yet
 }
 
 export interface StoreCreateDto {
     name: string;
     baseUrl: string;
+}
+
+export interface StoreUpdateDto {
+    name?: string;
+    baseUrl?: string;
+    searchUrlTemplate?: string; // "" clears it back to undiscovered; omit = no change
 }
 
 // ---- Tracking ----
@@ -61,6 +68,8 @@ export interface TrackingPairDto {
     book: TrackingBookSummary;
     store: TrackingStoreSummary;
     productUrl?: string;
+    priceSelector?: string;
+    stockSelector?: string;
     selectorsCached: boolean;
     status: PairStatus;
     lastScrapedAt?: string; // ISO-8601
@@ -92,10 +101,20 @@ export interface AvailabilityDto {
 }
 
 export interface SnapshotHistoryDto {
+    id: number;
+    pairId: number;
+    bookName: string;
     storeName: string;
     status: PairStatus;
     price?: number;
     scrapedAt: string;
+}
+
+export interface HistoryQuery {
+    isbn?: string;
+    storeName?: string;
+    status?: string;
+    limit?: number;
 }
 
 // ---- Runs ----

@@ -136,8 +136,13 @@ interface TrackingRowProps {
 
 function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
     const [productUrl, setProductUrl] = useState(pair.productUrl ?? "");
-    const [priceSelector, setPriceSelector] = useState("");
-    const [stockSelector, setStockSelector] = useState("");
+    const [priceSelector, setPriceSelector] = useState(
+        pair.priceSelector ?? "",
+    );
+    const [stockSelector, setStockSelector] = useState(
+        pair.stockSelector ?? "",
+    );
+    const [editingSelectors, setEditingSelectors] = useState(false);
     const [busy, setBusy] = useState(false);
     const [discoverError, setDiscoverError] = useState<string | null>(null);
 
@@ -160,6 +165,28 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
                     stockSelector: stockSelector || undefined,
                 }),
             );
+            setEditingSelectors(false);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function clearSelectors() {
+        const confirmed = window.confirm(
+            `Clear both selectors for ${pair.book.name} at ${pair.store.name}? This pair will move to "Needs setup" until new selectors are provided.`,
+        );
+        if (!confirmed) return;
+        setBusy(true);
+        try {
+            onUpdated(
+                await updateTracking(pair.id, {
+                    priceSelector: "",
+                    stockSelector: "",
+                }),
+            );
+            setPriceSelector("");
+            setStockSelector("");
+            setEditingSelectors(false);
         } finally {
             setBusy(false);
         }
@@ -192,6 +219,40 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
         }
     }
 
+    const selectorEditor = (
+        <div className="selector-editor">
+            <input
+                placeholder="Price selector"
+                value={priceSelector}
+                onChange={(e) => setPriceSelector(e.target.value)}
+            />
+            <input
+                placeholder="Stock selector"
+                value={stockSelector}
+                onChange={(e) => setStockSelector(e.target.value)}
+            />
+            <button onClick={handleDiscover} disabled={busy}>
+                Discover
+            </button>
+            <button
+                onClick={saveSelectors}
+                disabled={busy || !priceSelector || !stockSelector}>
+                Save
+            </button>
+            {(pair.priceSelector || pair.stockSelector) && (
+                <button
+                    className="link-button"
+                    onClick={clearSelectors}
+                    disabled={busy}>
+                    Clear selectors
+                </button>
+            )}
+            {discoverError && (
+                <span className="form-error">{discoverError}</span>
+            )}
+        </div>
+    );
+
     if (highlighted) {
         return (
             <div className="needs-setup-row">
@@ -199,54 +260,48 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
                     <strong>{pair.book.name}</strong> at {pair.store.name}
                     <div className="muted">{pair.productUrl}</div>
                 </div>
-                <input
-                    placeholder="Price selector"
-                    value={priceSelector}
-                    onChange={(e) => setPriceSelector(e.target.value)}
-                />
-                <input
-                    placeholder="Stock selector"
-                    value={stockSelector}
-                    onChange={(e) => setStockSelector(e.target.value)}
-                />
-                <button onClick={handleDiscover} disabled={busy}>
-                    Discover
-                </button>
-                <button
-                    onClick={saveSelectors}
-                    disabled={busy || !priceSelector || !stockSelector}>
-                    Save
-                </button>
-                {discoverError && (
-                    <span className="form-error">{discoverError}</span>
-                )}
+                {selectorEditor}
             </div>
         );
     }
 
     return (
-        <tr>
-            <td>{pair.book.name}</td>
-            <td>{pair.store.name}</td>
-            <td>
-                <AvailabilityBadge status={pair.status} />
-            </td>
-            <td>
-                <input
-                    value={productUrl}
-                    onChange={(e) => setProductUrl(e.target.value)}
-                    onBlur={saveUrl}
-                />
-            </td>
-            <td>{pair.selectorsCached ? "Cached" : "—"}</td>
-            <td>
-                <button
-                    className="link-button"
-                    onClick={toggleSkip}
-                    disabled={busy}>
-                    {pair.status === "SKIP" ? "Re-enable" : "Mark as Skip"}
-                </button>
-            </td>
-        </tr>
+        <>
+            <tr>
+                <td>{pair.book.name}</td>
+                <td>{pair.store.name}</td>
+                <td>
+                    <AvailabilityBadge status={pair.status} />
+                </td>
+                <td>
+                    <input
+                        value={productUrl}
+                        onChange={(e) => setProductUrl(e.target.value)}
+                        onBlur={saveUrl}
+                    />
+                </td>
+                <td>
+                    {pair.selectorsCached ? "Cached" : "—"}{" "}
+                    <button
+                        className="link-button"
+                        onClick={() => setEditingSelectors((v) => !v)}>
+                        {editingSelectors ? "Close" : "Edit"}
+                    </button>
+                </td>
+                <td>
+                    <button
+                        className="link-button"
+                        onClick={toggleSkip}
+                        disabled={busy}>
+                        {pair.status === "SKIP" ? "Re-enable" : "Mark as Skip"}
+                    </button>
+                </td>
+            </tr>
+            {editingSelectors && (
+                <tr className="selector-editor-row">
+                    <td colSpan={6}>{selectorEditor}</td>
+                </tr>
+            )}
+        </>
     );
 }
