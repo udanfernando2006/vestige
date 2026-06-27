@@ -5,6 +5,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { getRuns, getRunDetail } from "./client";
+import { getNotificationsEnabled } from "./settings";
 import type { RunChangeDto, RunSummaryDto } from "./types";
 
 const store = new LazyStore("settings.json");
@@ -15,9 +16,14 @@ let permissionGranted = false;
 
 async function ensurePermission(): Promise<boolean> {
     if (permissionGranted) return true;
-    permissionGranted = await isPermissionGranted();
-    if (!permissionGranted) {
-        permissionGranted = (await requestPermission()) === "granted";
+    try {
+        permissionGranted = await isPermissionGranted();
+        if (!permissionGranted) {
+            permissionGranted = (await requestPermission()) === "granted";
+        }
+    } catch (err) {
+        console.error("[notifications] permission check failed:", err);
+        return false;
     }
     return permissionGranted;
 }
@@ -62,7 +68,13 @@ function notifyForChanges(changes: RunChangeDto[]) {
 }
 
 export async function pollOnce() {
-    if (!(await ensurePermission())) return;
+    const notificationsEnabled = await getNotificationsEnabled();
+
+    // Skip the OS permission dance entirely when notifications are off — no
+    // reason to prompt for something that won't fire.
+    if (notificationsEnabled) {
+        if (!(await ensurePermission())) return;
+    }
 
     const lastNotifiedRunId =
         (await store.get<string>("lastNotifiedRunId")) ?? null;
@@ -77,14 +89,19 @@ export async function pollOnce() {
 
     const newRuns = selectNewRuns(runs, lastNotifiedRunId);
 
-    for (const run of newRuns) {
-        try {
-            const detail = await getRunDetail(run.runId);
-            notifyForChanges(detail.changes);
-        } catch {
-            // a malformed or since-rotated log file — skip it, don't block later runs
+    if (notificationsEnabled) {
+        for (const run of newRuns) {
+            try {
+                const detail = await getRunDetail(run.runId);
+                notifyForChanges(detail.changes);
+            } catch {
+                // a malformed or since-rotated log file — skip it, don't block later runs
+            }
         }
     }
+    // When disabled, detection/dedup bookkeeping still runs below — only the
+    // toast is skipped. lastNotifiedRunId still has to advance even on this
+    // branch, or re-enabling later replays everything missed as one burst.
 
     if (newRuns.length > 0) {
         await store.set("lastNotifiedRunId", runs[0].runId);
@@ -94,8 +111,10 @@ export async function pollOnce() {
 
 export function startNotificationPolling() {
     if (pollHandle) return;
-    pollOnce();
-    pollHandle = setInterval(pollOnce, POLL_INTERVAL_MS);
+    pollOnce().catch((err) => console.error("[notifications] pollOnce failed:", err));
+    pollHandle = setInterval(() => {
+        pollOnce().catch((err) => console.error("[notifications] pollOnce failed:", err));
+    }, POLL_INTERVAL_MS);
 }
 
 export function stopNotificationPolling() {

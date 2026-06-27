@@ -3,6 +3,8 @@ import {
     getApiBaseUrl,
     setApiBaseUrl,
     DEFAULT_API_BASE_URL,
+    getNotificationsEnabled,
+    setNotificationsEnabled,
 } from "../api/settings";
 import { checkHealth, getSettings, updateSettings } from "../api/client";
 import type { SettingsDto, SettingsUpdateDto } from "../api/types";
@@ -14,6 +16,9 @@ export default function Settings() {
         "idle",
     );
     const [testing, setTesting] = useState(false);
+
+    const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
+    const [notificationsLoaded, setNotificationsLoaded] = useState(false);
 
     const [pipeline, setPipeline] = useState<SettingsDto | null>(null);
     const [pipelineError, setPipelineError] = useState<string | null>(null);
@@ -61,6 +66,10 @@ export default function Settings() {
 
     useEffect(() => {
         getApiBaseUrl().then(setUrl);
+        getNotificationsEnabled().then((enabled) => {
+            setNotificationsEnabledState(enabled);
+            setNotificationsLoaded(true);
+        });
         loadPipelineSettings();
     }, []);
 
@@ -70,6 +79,11 @@ export default function Settings() {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         loadPipelineSettings();
+    }
+
+    async function handleToggleNotifications(checked: boolean) {
+        setNotificationsEnabledState(checked); // optimistic
+        await setNotificationsEnabled(checked);
     }
 
     async function handleTest() {
@@ -172,6 +186,24 @@ export default function Settings() {
                     </p>
                 )}
             </form>
+
+            <div className="card">
+                <h3>Notifications</h3>
+                <label className="checkbox-label">
+                    <input
+                        type="checkbox"
+                        checked={notificationsEnabled}
+                        disabled={!notificationsLoaded}
+                        onChange={(e) => handleToggleNotifications(e.target.checked)}
+                    />
+                    Show a desktop notification when a tracked book's price or stock changes
+                </label>
+                <p className="muted">
+                    Takes effect on the next check, within about 90 seconds — no restart needed.
+                    Turning this off doesn't pause checking for changes, so turning it back on
+                    later won't replay everything that happened while it was off.
+                </p>
+            </div>
 
             <form className="card" onSubmit={handleSavePipeline}>
                 <h3>Pipeline configuration</h3>
