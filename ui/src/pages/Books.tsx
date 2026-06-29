@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { getBooks, createBook, deleteBook } from "../api/client";
 import type { BookGroupDto } from "../api/types";
+import Window from "../components/Window";
+import { useConfirm } from "../hooks/useConfirm";
 
 export default function Books() {
     const [groups, setGroups] = useState<BookGroupDto[]>([]);
@@ -12,6 +14,8 @@ export default function Books() {
     const [seriesName, setSeriesName] = useState("");
     const [isSeriesEntry, setIsSeriesEntry] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+
+    const { confirm, dialog } = useConfirm();
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -54,8 +58,9 @@ export default function Books() {
     }
 
     async function handleDelete(id: number, title: string) {
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
             `Delete "${title}"? This also deletes all tracking pairs and history for this book.`,
+            { title: "Delete book", confirmLabel: "Delete", destructive: true },
         );
         if (!confirmed) return;
         try {
@@ -72,53 +77,56 @@ export default function Books() {
         <div className="page">
             <h2>Books</h2>
             {error && <p className="form-error">{error}</p>}
+            {dialog}
 
-            <form className="card" onSubmit={handleAdd}>
-                <h3>Add book</h3>
-                <label>
-                    Name{" "}
-                    <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                    />
-                </label>
-                <label>
-                    ISBN{" "}
-                    <input
-                        value={isbn}
-                        onChange={(e) => setIsbn(e.target.value)}
-                        required
-                    />
-                </label>
-                <label>
-                    Series (optional){" "}
-                    <input
-                        value={seriesName}
-                        onChange={(e) => setSeriesName(e.target.value)}
-                    />
-                </label>
-                <label className="checkbox-label">
-                    <input
-                        type="checkbox"
-                        checked={isSeriesEntry}
-                        onChange={(e) => setIsSeriesEntry(e.target.checked)}
-                    />
-                    Part of a series
-                </label>
-                <button type="submit" disabled={submitting}>
-                    {submitting ? "Adding…" : "Add book"}
-                </button>
-            </form>
+            <Window title="Add book">
+                <form onSubmit={handleAdd}>
+                    <label>
+                        Name{" "}
+                        <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                        />
+                    </label>
+                    <label>
+                        ISBN{" "}
+                        <input
+                            value={isbn}
+                            onChange={(e) => setIsbn(e.target.value)}
+                            required
+                        />
+                    </label>
+                    <label>
+                        Series (optional){" "}
+                        <input
+                            value={seriesName}
+                            onChange={(e) => setSeriesName(e.target.value)}
+                        />
+                    </label>
+                    <label className="checkbox-label">
+                        <input
+                            type="checkbox"
+                            checked={isSeriesEntry}
+                            onChange={(e) =>
+                                setIsSeriesEntry(e.target.checked)
+                            }
+                        />
+                        Part of a series
+                    </label>
+                    <button type="submit" disabled={submitting}>
+                        {submitting ? "Adding…" : "Add book"}
+                    </button>
+                </form>
+            </Window>
 
             {loading ? (
                 <p>Loading…</p>
             ) : (
                 groups.map((g) => (
-                    <div
+                    <Window
                         key={g.seriesName ?? "__standalone__"}
-                        className="card">
-                        <h3>{g.seriesName ?? "Standalone"}</h3>
+                        title={g.seriesName ?? "Standalone"}>
                         <table>
                             <thead>
                                 <tr>
@@ -134,7 +142,6 @@ export default function Books() {
                                         <td>{b.isbn}</td>
                                         <td>
                                             <button
-                                                className="link-button"
                                                 onClick={() =>
                                                     handleDelete(b.id, b.name)
                                                 }>
@@ -145,7 +152,7 @@ export default function Books() {
                                 ))}
                             </tbody>
                         </table>
-                    </div>
+                    </Window>
                 ))
             )}
         </div>

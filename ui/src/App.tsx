@@ -58,41 +58,58 @@ export default function App() {
     // configured URL is wrong — otherwise there's no way to fix it from the UI.
     if (backendStatus !== "ready" && page !== "settings") {
         return (
-            <div className="backend-gate">
-                <h1>Vestige</h1>
-                {backendStatus === "checking" && <p>Connecting to the API…</p>}
-                {backendStatus === "unreachable" && (
-                    <>
-                        <p>
-                            Couldn't reach the Spring Boot API. Make sure{" "}
-                            <code>docker-compose up</code> (or the API jar) is
-                            running.
-                        </p>
-                        <button onClick={probe}>Retry</button>
-                    </>
-                )}
-                <button
-                    className="link-button"
-                    onClick={() => setPage("settings")}>
-                    Open Settings
-                </button>
+            <div className="app-shell">
+                <div className="backend-gate-wrap">
+                    <div className="vestige-window backend-gate">
+                        <div className="vestige-titlebar">
+                            <span>Vestige</span>
+                        </div>
+                        <div className="vestige-window-body backend-gate-body">
+                            {backendStatus === "checking" && (
+                                <p>Connecting to the API…</p>
+                            )}
+                            {backendStatus === "unreachable" && (
+                                <>
+                                    <p>
+                                        Couldn't reach the Spring Boot API.
+                                        Make sure{" "}
+                                        <code>docker-compose up</code> (or the
+                                        API jar) is running.
+                                    </p>
+                                    <button onClick={probe}>Retry</button>
+                                </>
+                            )}
+                            <button
+                                className="vestige-btn-danger"
+                                onClick={() => setPage("settings")}>
+                                Open Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="app-shell">
-            <nav className="sidebar">
-                <h1>Vestige</h1>
-                {NAV.map((n) => (
-                    <button
-                        key={n.id}
-                        className={n.id === page ? "nav-active" : ""}
-                        onClick={() => setPage(n.id)}>
-                        {n.label}
-                    </button>
-                ))}
-            </nav>
+            <aside className="vestige-window vestige-sidebar">
+                <div className="vestige-titlebar">
+                    <span>Vestige</span>
+                </div>
+                <nav className="vestige-sidebar-nav">
+                    {NAV.map((n) => (
+                        <button
+                            key={n.id}
+                            className={`vestige-nav-btn ${
+                                n.id === page ? "vestige-nav-active" : ""
+                            }`.trim()}
+                            onClick={() => setPage(n.id)}>
+                            {n.label}
+                        </button>
+                    ))}
+                </nav>
+            </aside>
             <main className="main-content">
                 {page === "dashboard" && <Dashboard />}
                 {page === "books" && <Books />}

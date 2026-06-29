@@ -8,6 +8,8 @@ import {
 } from "../api/client";
 import type { BookGroupDto, StoreDto, SnapshotHistoryDto } from "../api/types";
 import AvailabilityBadge from "../components/AvailabilityBadge";
+import Window from "../components/Window";
+import { useConfirm } from "../hooks/useConfirm";
 
 export default function History() {
     const [bookGroups, setBookGroups] = useState<BookGroupDto[]>([]);
@@ -18,6 +20,8 @@ export default function History() {
     const [snapshots, setSnapshots] = useState<SnapshotHistoryDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const { confirm, dialog } = useConfirm();
 
     // Store options come from a dedicated fetch, not derived from the current
     // (possibly already store-filtered) snapshot list — deriving them from
@@ -64,8 +68,13 @@ export default function History() {
     const books = bookGroups.flatMap((g) => g.books);
 
     async function handleDeleteSnapshot(id: number) {
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
             "Delete this snapshot? This cannot be undone.",
+            {
+                title: "Delete snapshot",
+                confirmLabel: "Delete",
+                destructive: true,
+            },
         );
         if (!confirmed) return;
         try {
@@ -85,8 +94,13 @@ export default function History() {
         bookName: string,
         storeName: string,
     ) {
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
             `Delete ALL history for ${bookName} at ${storeName}? This cannot be undone.`,
+            {
+                title: "Delete history",
+                confirmLabel: "Delete all",
+                destructive: true,
+            },
         );
         if (!confirmed) return;
         try {
@@ -105,8 +119,9 @@ export default function History() {
         <div className="page">
             <h2>History</h2>
             {error && <p className="form-error">{error}</p>}
+            {dialog}
 
-            <div className="card">
+            <Window title="Filters">
                 <label>
                     Book
                     <select
@@ -145,9 +160,9 @@ export default function History() {
                         <option value="ERROR">Error</option>
                     </select>
                 </label>
-            </div>
+            </Window>
 
-            <div className="card">
+            <Window title="Snapshots">
                 {loading ? (
                     <p>Loading…</p>
                 ) : (
@@ -179,24 +194,25 @@ export default function History() {
                                         {new Date(s.scrapedAt).toLocaleString()}
                                     </td>
                                     <td>
-                                        <button
-                                            className="link-button"
-                                            onClick={() =>
-                                                handleDeleteSnapshot(s.id)
-                                            }>
-                                            Delete
-                                        </button>
-                                        <button
-                                            className="link-button"
-                                            onClick={() =>
-                                                handleDeletePairHistory(
-                                                    s.pairId,
-                                                    s.bookName,
-                                                    s.storeName,
-                                                )
-                                            }>
-                                            Delete all for this pair
-                                        </button>
+                                        {/* <span className="inline-flex gap-2"> */}
+                                        <span className="btn-group">
+                                            <button
+                                                onClick={() =>
+                                                    handleDeleteSnapshot(s.id)
+                                                }>
+                                                Delete
+                                            </button>
+                                            <button
+                                                onClick={() =>
+                                                    handleDeletePairHistory(
+                                                        s.pairId,
+                                                        s.bookName,
+                                                        s.storeName,
+                                                    )
+                                                }>
+                                                Delete all for this pair
+                                            </button>
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -210,7 +226,7 @@ export default function History() {
                         </tbody>
                     </table>
                 )}
-            </div>
+            </Window>
         </div>
     );
 }

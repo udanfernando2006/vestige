@@ -6,6 +6,8 @@ import {
     deleteStore,
 } from "../api/client";
 import type { StoreDto } from "../api/types";
+import Window from "../components/Window";
+import { useConfirm } from "../hooks/useConfirm";
 
 export default function Stores() {
     const [stores, setStores] = useState<StoreDto[]>([]);
@@ -21,6 +23,8 @@ export default function Stores() {
         searchUrlTemplate: "",
     });
     const [savingEdit, setSavingEdit] = useState(false);
+
+    const { confirm, dialog } = useConfirm();
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -92,8 +96,13 @@ export default function Stores() {
     }
 
     async function handleDelete(store: StoreDto) {
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
             `Delete "${store.name}"? This also deletes every tracking pair for this store and all of its availability history.`,
+            {
+                title: "Delete store",
+                confirmLabel: "Delete",
+                destructive: true,
+            },
         );
         if (!confirmed) return;
         try {
@@ -110,32 +119,34 @@ export default function Stores() {
         <div className="page">
             <h2>Stores</h2>
             {error && <p className="form-error">{error}</p>}
+            {dialog}
 
-            <form className="card" onSubmit={handleAdd}>
-                <h3>Add store</h3>
-                <label>
-                    Name{" "}
-                    <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                    />
-                </label>
-                <label>
-                    Base URL
-                    <input
-                        value={baseUrl}
-                        onChange={(e) => setBaseUrl(e.target.value)}
-                        placeholder="https://…"
-                        required
-                    />
-                </label>
-                <button type="submit" disabled={submitting}>
-                    {submitting ? "Adding…" : "Add store"}
-                </button>
-            </form>
+            <Window title="Add store">
+                <form onSubmit={handleAdd}>
+                    <label>
+                        Name{" "}
+                        <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                        />
+                    </label>
+                    <label>
+                        Base URL
+                        <input
+                            value={baseUrl}
+                            onChange={(e) => setBaseUrl(e.target.value)}
+                            placeholder="https://…"
+                            required
+                        />
+                    </label>
+                    <button type="submit" disabled={submitting}>
+                        {submitting ? "Adding…" : "Add store"}
+                    </button>
+                </form>
+            </Window>
 
-            <div className="card">
+            <Window title="Stores">
                 <table>
                     <thead>
                         <tr>
@@ -171,7 +182,8 @@ export default function Stores() {
                                                 onChange={(e) =>
                                                     setEditDraft({
                                                         ...editDraft,
-                                                        baseUrl: e.target.value,
+                                                        baseUrl:
+                                                            e.target.value,
                                                     })
                                                 }
                                             />
@@ -192,19 +204,23 @@ export default function Stores() {
                                             />
                                         </td>
                                         <td>
-                                            <button
-                                                onClick={() => saveEdit(s.id)}
-                                                disabled={savingEdit}>
-                                                Save
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="link-button"
-                                                onClick={() =>
-                                                    setEditingId(null)
-                                                }>
-                                                Cancel
-                                            </button>
+                                            {/* <span className="inline-flex gap-2"> */}
+                                            <span className="btn-group">
+                                                <button
+                                                    onClick={() =>
+                                                        saveEdit(s.id)
+                                                    }
+                                                    disabled={savingEdit}>
+                                                    Save
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setEditingId(null)
+                                                    }>
+                                                    Cancel
+                                                </button>
+                                            </span>
                                         </td>
                                     </tr>
                                 ) : (
@@ -216,18 +232,23 @@ export default function Stores() {
                                                 "Undiscovered"}
                                         </td>
                                         <td>
-                                            <button
-                                                type="button"
-                                                className="link-button"
-                                                onClick={() => startEdit(s)}>
-                                                Edit
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="link-button"
-                                                onClick={() => handleDelete(s)}>
-                                                Delete
-                                            </button>
+                                            {/* <span className="inline-flex gap-2"> */}
+                                            <span className="btn-group">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        startEdit(s)
+                                                    }>
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        handleDelete(s)
+                                                    }>
+                                                    Delete
+                                                </button>
+                                            </span>
                                         </td>
                                     </tr>
                                 ),
@@ -239,11 +260,12 @@ export default function Stores() {
                     The search URL template must contain the literal token{" "}
                     <code>=test</code> (e.g.{" "}
                     <code>https://store.com/?s=test</code>) — the Crawler
-                    replaces it with the encoded search query on each discovery
-                    run. Leaving it blank just means the Crawler re-discovers it
-                    the next time a pair on this store needs a product URL.
+                    replaces it with the encoded search query on each
+                    discovery run. Leaving it blank just means the Crawler
+                    re-discovers it the next time a pair on this store needs a
+                    product URL.
                 </p>
-            </div>
+            </Window>
         </div>
     );
 }

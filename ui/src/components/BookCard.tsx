@@ -17,23 +17,27 @@ export default function BookCard({
     stores,
 }: BookCardProps) {
     return (
-        <div className="card book-card">
-            <div className="book-card-header">
-                <strong>{bookName}</strong>
-                {seriesName && (
-                    <span className="book-card-series">{seriesName}</span>
-                )}
+        <div className="vestige-window">
+            <div className="vestige-titlebar">
+                <span>{bookName}</span>
             </div>
-            <div className="book-card-stores">
-                {stores.length === 0 && (
-                    <span className="muted">Not tracked anywhere yet</span>
-                )}
-                {stores.map((s) => (
-                    <div key={s.storeName} className="book-card-store-row">
-                        <span>{s.storeName}</span>
-                        <AvailabilityBadge status={s.status} />
-                    </div>
-                ))}
+            <div className="vestige-window-body">
+                <div className="book-card-header">
+                    {seriesName && (
+                        <span className="book-card-series">{seriesName}</span>
+                    )}
+                </div>
+                <div className="book-card-stores">
+                    {stores.length === 0 && (
+                        <span className="muted">Not tracked anywhere yet</span>
+                    )}
+                    {stores.map((s) => (
+                        <div key={s.storeName} className="book-card-store-row">
+                            <span>{s.storeName}</span>
+                            <AvailabilityBadge status={s.status} />
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );

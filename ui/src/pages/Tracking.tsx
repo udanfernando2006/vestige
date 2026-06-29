@@ -14,6 +14,8 @@ import type {
 } from "../api/types";
 import AvailabilityBadge from "../components/AvailabilityBadge";
 import TrackingForm from "../components/TrackingForm";
+import Window from "../components/Window";
+import { useConfirm } from "../hooks/useConfirm";
 
 export default function Tracking() {
     const [pairs, setPairs] = useState<TrackingPairDto[]>([]);
@@ -21,6 +23,8 @@ export default function Tracking() {
     const [stores, setStores] = useState<StoreDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const { confirm, dialog } = useConfirm();
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -65,24 +69,22 @@ export default function Tracking() {
         <div className="page">
             <h2>Tracking</h2>
             {error && <p className="form-error">{error}</p>}
+            {dialog}
 
             {needsSetup.length > 0 && (
-                <div className="banner banner-amber">
-                    <strong>
-                        {needsSetup.length} pair(s) need selectors before they
-                        can run.
-                    </strong>
-                    <div className="needs-setup-list">
-                        {needsSetup.map((p) => (
-                            <TrackingRow
-                                key={p.id}
-                                pair={p}
-                                highlighted
-                                onUpdated={replacePair}
-                            />
-                        ))}
-                    </div>
-                </div>
+                <Window
+                    title={`${needsSetup.length} pair(s) need selectors`}
+                    variant="warning">
+                    {needsSetup.map((p) => (
+                        <TrackingRow
+                            key={p.id}
+                            pair={p}
+                            highlighted
+                            onUpdated={replacePair}
+                            confirm={confirm}
+                        />
+                    ))}
+                </Window>
             )}
 
             <TrackingForm
@@ -91,7 +93,7 @@ export default function Tracking() {
                 onCreated={replacePair}
             />
 
-            <div className="card">
+            <Window title="Tracking pairs">
                 {loading ? (
                     <p>Loading…</p>
                 ) : (
@@ -112,18 +114,19 @@ export default function Tracking() {
                                     key={p.id}
                                     pair={p}
                                     onUpdated={replacePair}
+                                    confirm={confirm}
                                 />
                             ))}
                         </tbody>
                     </table>
                 )}
-            </div>
-            <p className="muted">
-                There's no hard delete for a tracking pair yet — the API layer
-                doesn't expose <code>DELETE /api/tracking/{"{id}"}</code>. Use
-                Skip to stop tracking a pair without losing its history (see
-                Part 18).
-            </p>
+                <p className="muted">
+                    There's no hard delete for a tracking pair yet — the API
+                    layer doesn't expose{" "}
+                    <code>DELETE /api/tracking/{"{id}"}</code>. Use Skip to
+                    stop tracking a pair without losing its history.
+                </p>
+            </Window>
         </div>
     );
 }
@@ -132,9 +135,17 @@ interface TrackingRowProps {
     pair: TrackingPairDto;
     highlighted?: boolean;
     onUpdated: (pair: TrackingPairDto) => void;
+    confirm: (
+        message: string,
+        options?: {
+            title?: string;
+            confirmLabel?: string;
+            destructive?: boolean;
+        },
+    ) => Promise<boolean>;
 }
 
-function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
+function TrackingRow({ pair, highlighted, onUpdated, confirm }: TrackingRowProps) {
     const [productUrl, setProductUrl] = useState(pair.productUrl ?? "");
     const [priceSelector, setPriceSelector] = useState(
         pair.priceSelector ?? "",
@@ -172,8 +183,13 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
     }
 
     async function clearSelectors() {
-        const confirmed = window.confirm(
+        const confirmed = await confirm(
             `Clear both selectors for ${pair.book.name} at ${pair.store.name}? This pair will move to "Needs setup" until new selectors are provided.`,
+            {
+                title: "Clear selectors",
+                confirmLabel: "Clear",
+                destructive: true,
+            },
         );
         if (!confirmed) return;
         setBusy(true);
@@ -240,10 +256,7 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
                 Save
             </button>
             {(pair.priceSelector || pair.stockSelector) && (
-                <button
-                    className="link-button"
-                    onClick={clearSelectors}
-                    disabled={busy}>
+                <button onClick={clearSelectors} disabled={busy}>
                     Clear selectors
                 </button>
             )}
@@ -280,21 +293,22 @@ function TrackingRow({ pair, highlighted, onUpdated }: TrackingRowProps) {
                         onBlur={saveUrl}
                     />
                 </td>
+                <td>{pair.selectorsCached ? "Cached" : "—"}</td>
                 <td>
-                    {pair.selectorsCached ? "Cached" : "—"}{" "}
-                    <button
-                        className="link-button"
-                        onClick={() => setEditingSelectors((v) => !v)}>
-                        {editingSelectors ? "Close" : "Edit"}
-                    </button>
-                </td>
-                <td>
-                    <button
-                        className="link-button"
-                        onClick={toggleSkip}
-                        disabled={busy}>
-                        {pair.status === "SKIP" ? "Re-enable" : "Mark as Skip"}
-                    </button>
+                    {/* <span className="inline-flex gap-2"> */}
+                    <span className="btn-group">
+                        <button
+                            onClick={() => setEditingSelectors((v) => !v)}>
+                            {editingSelectors
+                                ? "Close Selectors"
+                                : "Edit Selectors"}
+                        </button>
+                        <button onClick={toggleSkip} disabled={busy}>
+                            {pair.status === "SKIP"
+                                ? "Re-enable"
+                                : "Mark as Skip"}
+                        </button>
+                    </span>
                 </td>
             </tr>
             {editingSelectors && (
