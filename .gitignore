@@ -22,3 +22,21 @@ __pycache__/
 htmlcov/
 nshtmlcov/
 coverage.xml
+
+# Local Logs and Artifacts
+cloud_docker_logs.txt
+/server_logs/
+
+# Security / Keys
+*.pem
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.*.tf
+*.tfvars
+*.tfvars.json
