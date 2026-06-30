@@ -126,11 +126,21 @@ resource "azurerm_linux_virtual_machine" "vestige_vm" {
 
   custom_data = base64encode(<<-EOF
     #!/bin/bash
+    # 1. Setup 2GB Swap Space
     sudo fallocate -l 2G /swapfile
     sudo chmod 600 /swapfile
     sudo mkswap /swapfile
     sudo swapon /swapfile
     echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+    # 2. Install Docker and Docker Compose v2
+    sudo apt-get update
+    sudo apt-get install -y docker.io docker-compose-v2
+    sudo systemctl enable --now docker
+
+    # 3. Create the workspace and grant permissions to the azureuser
+    mkdir -p /home/azureuser/vestige
+    chown -R azureuser:azureuser /home/azureuser/vestige
   EOF
   )
 }
