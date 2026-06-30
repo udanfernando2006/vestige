@@ -24,11 +24,12 @@ nshtmlcov/
 coverage.xml
 
 # Local Logs and Artifacts
-cloud_docker_logs.txt
-/server_logs/
+cloud_docker_logs_*.txt
+/server_logs_*/
 
 # Security / Keys
 *.pem
+terraform/azure/vestige-azure-key*
 
 # Terraform
 **/.terraform/*
