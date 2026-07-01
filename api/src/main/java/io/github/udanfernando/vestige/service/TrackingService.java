@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -109,7 +110,7 @@ public class TrackingService {
     }
 
     private TrackingPairDto toDto(TrackingPair p) {
-        LocalDateTime lastScraped = snapshotRepo
+        Instant lastScraped = snapshotRepo
                 .findTopByPairIdOrderByScrapedAtDesc(p.getId())
                 .map(AvailabilitySnapshot::getScrapedAt)
                 .orElse(null);

@@ -1,7 +1,7 @@
 package io.github.udanfernando.vestige.dto;
 
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class TrackingPairDto {
@@ -15,5 +15,5 @@ public class TrackingPairDto {
     private String stockSelector;
     private boolean selectorsCached;
     private String status;
-    private LocalDateTime lastScrapedAt;
+    private Instant lastScrapedAt;
 }
