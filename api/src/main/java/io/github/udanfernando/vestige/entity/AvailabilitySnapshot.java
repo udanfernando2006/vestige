@@ -3,7 +3,7 @@ package io.github.udanfernando.vestige.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "availability_snapshots")
@@ -35,5 +35,5 @@ public class AvailabilitySnapshot {
     private String source;
 
     @Column(name = "scraped_at", nullable = false)
-    private LocalDateTime scrapedAt;
+    private Instant scrapedAt;
 }
