@@ -24,4 +24,10 @@ public class Series {
     @OneToMany(mappedBy = "series")
     @Builder.Default
     private List<Book> books = new ArrayList<>();
+
+    @Column(columnDefinition = "TEXT")
+    private String author;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 }

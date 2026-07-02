@@ -352,7 +352,6 @@ button:disabled {
     transform: none;
 }
 
-
 /* Spacing for table cells that hold more than one button — written by hand
    rather than as Tailwind utility classes, since it shouldn't depend on
    content-scanning picking up "inline-flex"/"gap-2" as literal strings. */
@@ -506,6 +505,91 @@ button.run-log-toggle:active:not(:disabled) {
 }
 .vestige-titlebar-close:active {
     transform: none;
+}
+
+/* =========================================================================
+   Kebab menu (row/header overflow actions)
+   Trigger deliberately keeps the default button chrome (gold bg, ink border,
+   hard shadow) rather than a minimal/borderless style — it appears both on
+   light table-cell backgrounds and inside the dark .vestige-titlebar-actions
+   area, and the default button is the one style already proven legible on
+   both. Only padding is narrowed for the single "⋮" glyph.
+   ========================================================================= */
+.vestige-kebab {
+    position: relative;
+    display: inline-block;
+}
+.vestige-kebab-trigger {
+    padding: 4px 9px;
+    line-height: 1;
+    font-size: 14px;
+}
+.vestige-kebab-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 11rem;
+    background: var(--color-panel-bg);
+    border: 2px solid var(--color-ink);
+    box-shadow: var(--shadow-window);
+}
+.vestige-kebab-item {
+    background: none;
+    border: none;
+    box-shadow: none;
+    text-align: left;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    color: var(--color-ink);
+    cursor: pointer;
+}
+.vestige-kebab-item:hover,
+.vestige-kebab-item:focus-visible {
+    background: var(--color-tag-bg);
+}
+.vestige-kebab-item:active:not(:disabled) {
+    transform: none;
+}
+.vestige-kebab-item-danger {
+    color: var(--color-accent-strong);
+}
+
+/* =========================================================================
+   Series/Book detail editors (author + description) — reuses the same
+   vertical label rhythm as other forms, just scoped for inline placement
+   inside a Window body / table cell rather than a standalone form.
+   ========================================================================= */
+.series-detail-editor {
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 2px solid var(--color-ink);
+}
+.series-detail-editor textarea,
+.series-detail-editor input {
+    max-width: 480px;
+}
+.series-detail-summary {
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.series-detail-summary span {
+    display: block;
+    font-weight: 600;
+    color: var(--color-ink);
+}
+.series-detail-summary p {
+    margin: 0.25rem 0 0;
+}
+
+.truncate-cell {
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* =========================================================================

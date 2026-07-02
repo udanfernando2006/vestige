@@ -2,7 +2,12 @@ import { getApiBaseUrl } from "./settings";
 import type {
     BookGroupDto,
     BookCreateDto,
+    BookUpdateDto,
     BookDto,
+    SeriesDto,
+    SeriesCreateDto,
+    SeriesUpdateDto,
+    BulkSeriesAssignDto,
     StoreDto,
     StoreCreateDto,
     StoreUpdateDto,
@@ -75,6 +80,47 @@ export function createBook(dto: BookCreateDto): Promise<BookDto> {
 
 export function deleteBook(id: number): Promise<void> {
     return request(`/api/books/${id}`, { method: "DELETE" });
+}
+
+export function updateBook(id: number, dto: BookUpdateDto): Promise<BookDto> {
+    return request(`/api/books/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function bulkAssignSeries(dto: BulkSeriesAssignDto): Promise<BookDto[]> {
+    return request("/api/books/series", {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+// ---- Series ----
+
+export function getSeries(): Promise<SeriesDto[]> {
+    return request("/api/series");
+}
+
+export function createSeries(dto: SeriesCreateDto): Promise<SeriesDto> {
+    return request("/api/series", {
+        method: "POST",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function updateSeries(
+    id: number,
+    dto: SeriesUpdateDto,
+): Promise<SeriesDto> {
+    return request(`/api/series/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function deleteSeries(id: number): Promise<void> {
+    return request(`/api/series/${id}`, { method: "DELETE" });
 }
 
 // ---- Stores ----

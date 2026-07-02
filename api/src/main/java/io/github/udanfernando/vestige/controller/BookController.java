@@ -31,4 +31,14 @@ public class BookController {
         bookService.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<BookDto> update(@PathVariable Long id, @RequestBody BookUpdateDto dto) {
+        return ResponseEntity.ok(bookService.update(id, dto));
+    }
+
+    @PatchMapping("/series")
+    public ResponseEntity<List<BookDto>> bulkAssignSeries(@Valid @RequestBody BulkSeriesAssignDto dto) {
+        return ResponseEntity.ok(bookService.bulkAssignSeries(dto));
+    }
 }

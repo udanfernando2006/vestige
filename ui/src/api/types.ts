@@ -16,6 +16,8 @@ export interface BookDto {
     isSeriesEntry: boolean;
     seriesId?: number;
     seriesName?: string;
+    author?: string;
+    description?: string;
 }
 
 export interface BookGroupDto {
@@ -28,6 +30,41 @@ export interface BookCreateDto {
     isbn: string;
     isSeriesEntry: boolean;
     seriesName?: string | null;
+    author?: string;
+    description?: string;
+}
+
+export interface BookUpdateDto {
+    author?: string; // "" clears it; omit = no change
+    description?: string; // "" clears it; omit = no change
+}
+
+// ---- Series ----
+
+export interface SeriesDto {
+    id: number;
+    name: string;
+    bookCount: number;
+    author?: string;
+    description?: string;
+}
+
+export interface SeriesCreateDto {
+    name: string;
+    author?: string;
+    description?: string;
+}
+
+export interface SeriesUpdateDto {
+    name?: string;
+    author?: string; // "" clears it; omit = no change
+    description?: string; // "" clears it; omit = no change
+}
+
+export interface BulkSeriesAssignDto {
+    bookIds: number[];
+    seriesId?: number;
+    newSeriesName?: string;
 }
 
 // ---- Stores ----

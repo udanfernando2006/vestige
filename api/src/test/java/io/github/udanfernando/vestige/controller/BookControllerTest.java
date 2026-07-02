@@ -1,9 +1,8 @@
 package io.github.udanfernando.vestige.controller;
 
+import io.github.udanfernando.vestige.dto.*;
 import tools.jackson.databind.ObjectMapper;
-import io.github.udanfernando.vestige.dto.BookCreateDto;
-import io.github.udanfernando.vestige.dto.BookDto;
-import io.github.udanfernando.vestige.dto.BookGroupDto;
+
 import io.github.udanfernando.vestige.service.BookService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -79,5 +79,38 @@ class BookControllerTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isbn").exists());
+    }
+
+    @Test
+    void update_returnsUpdatedBook() throws Exception {
+        BookUpdateDto updateDto = BookUpdateDto.builder().author("New Author").build();
+        BookDto updated = BookDto.builder()
+                .id(1L).name("The Last Wish").isbn("9780316452465").author("New Author").build();
+
+        when(bookService.update(eq(1L), any())).thenReturn(updated);
+
+        mockMvc.perform(patch("/api/books/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateDto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.author").value("New Author"));
+    }
+
+    @Test
+    void bulkAssignSeries_returnsUpdatedBooks() throws Exception {
+        BulkSeriesAssignDto bulkDto = BulkSeriesAssignDto.builder()
+                .bookIds(List.of(1L, 2L)).newSeriesName("The Witcher").build();
+
+        BookDto book1 = BookDto.builder().id(1L).name("The Last Wish").isbn("A").seriesName("The Witcher").build();
+        BookDto book2 = BookDto.builder().id(2L).name("Sword of Destiny").isbn("B").seriesName("The Witcher").build();
+
+        when(bookService.bulkAssignSeries(any())).thenReturn(List.of(book1, book2));
+
+        mockMvc.perform(patch("/api/books/series")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bulkDto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].seriesName").value("The Witcher"))
+                .andExpect(jsonPath("$[1].seriesName").value("The Witcher"));
     }
 }

@@ -16,4 +16,6 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     // Eager-load series to avoid N+1 on the grouped books endpoint
     @EntityGraph(attributePaths = {"series"})
     List<Book> findAllByOrderByNameAsc();
+
+    List<Book> findBySeriesId(Long seriesId);
 }
