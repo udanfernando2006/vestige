@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Dashboard from "./pages/Dashboard";
@@ -40,6 +40,7 @@ export default function App() {
     >("checking");
     const [dockerStatus, setDockerStatus] = useState<DockerStatus>("idle");
     const [dockerLog, setDockerLog] = useState<string[]>([]);
+    const dockerFlowStarted = useRef(false);
 
     const probe = useCallback(async () => {
         setBackendStatus("checking");
@@ -61,6 +62,9 @@ export default function App() {
     }, []);
 
     const startDockerFlow = useCallback(async () => {
+        if (dockerFlowStarted.current) return;
+        dockerFlowStarted.current = true;
+
         const local = await isLocalDeployment();
         const autoEnabled = await getAutoDockerEnabled();
         if (!local || !autoEnabled) {
