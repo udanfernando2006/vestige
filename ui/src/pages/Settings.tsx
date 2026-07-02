@@ -5,6 +5,8 @@ import {
     DEFAULT_API_BASE_URL,
     getNotificationsEnabled,
     setNotificationsEnabled,
+    getAutoDockerEnabled,
+    setAutoDockerEnabled,
 } from "../api/settings";
 import { checkHealth, getSettings, updateSettings } from "../api/client";
 import type { SettingsDto, SettingsUpdateDto } from "../api/types";
@@ -20,6 +22,9 @@ export default function Settings() {
 
     const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
     const [notificationsLoaded, setNotificationsLoaded] = useState(false);
+
+    const [autoDockerEnabled, setAutoDockerEnabledState] = useState(true);
+    const [autoDockerLoaded, setAutoDockerLoaded] = useState(false);
 
     const [pipeline, setPipeline] = useState<SettingsDto | null>(null);
     const [pipelineError, setPipelineError] = useState<string | null>(null);
@@ -71,6 +76,10 @@ export default function Settings() {
             setNotificationsEnabledState(enabled);
             setNotificationsLoaded(true);
         });
+        getAutoDockerEnabled().then((enabled) => {
+            setAutoDockerEnabledState(enabled);
+            setAutoDockerLoaded(true);
+        });
         loadPipelineSettings();
     }, []);
 
@@ -85,6 +94,11 @@ export default function Settings() {
     async function handleToggleNotifications(checked: boolean) {
         setNotificationsEnabledState(checked); // optimistic
         await setNotificationsEnabled(checked);
+    }
+
+    async function handleToggleAutoDocker(checked: boolean) {
+        setAutoDockerEnabledState(checked); // optimistic
+        await setAutoDockerEnabled(checked);
     }
 
     async function handleTest() {
@@ -166,8 +180,8 @@ export default function Settings() {
                     </label>
                     <p className="muted">
                         Use <code>http://localhost:8080</code> locally, or the
-                        EC2/Azure VM public IP on port 8080 once deployed to
-                        the cloud.
+                        EC2/Azure VM public IP on port 8080 once deployed to the
+                        cloud.
                     </p>
                     {/* <div className="flex gap-2"> */}
                     <div className="btn-group">
@@ -212,10 +226,32 @@ export default function Settings() {
                     stock changes
                 </label>
                 <p className="muted">
-                    Takes effect on the next check, within about 90 seconds —
-                    no restart needed. Turning this off doesn't pause checking
-                    for changes, so turning it back on later won't replay
-                    everything that happened while it was off.
+                    Takes effect on the next check, within about 90 seconds — no
+                    restart needed. Turning this off doesn't pause checking for
+                    changes, so turning it back on later won't replay everything
+                    that happened while it was off.
+                </p>
+            </Window>
+
+            <Window title="Local backend automation">
+                <label className="checkbox-label">
+                    <input
+                        type="checkbox"
+                        checked={autoDockerEnabled}
+                        disabled={!autoDockerLoaded}
+                        onChange={(e) =>
+                            handleToggleAutoDocker(e.target.checked)
+                        }
+                    />
+                    Automatically start Docker when Vestige opens and stop it
+                    when Vestige quits
+                </label>
+                <p className="muted">
+                    Only applies when the API base URL above points at localhost
+                    — a cloud deployment (EC2/Azure/GCP) is never affected by
+                    this setting. Turning this off means you're responsible for
+                    running <code>docker compose up</code> yourself before
+                    opening the app.
                 </p>
             </Window>
 
@@ -283,9 +319,9 @@ export default function Settings() {
                                 />
                             </label>
                             <p className="muted">
-                                Checked roughly once a minute — actual run
-                                time may drift slightly from the exact hour
-                                mark. Leave blank to disable.
+                                Checked roughly once a minute — actual run time
+                                may drift slightly from the exact hour mark.
+                                Leave blank to disable.
                             </p>
 
                             <h4>Selector discovery (Path B)</h4>
@@ -409,9 +445,7 @@ export default function Settings() {
                             </label>
 
                             <button type="submit" disabled={syncing}>
-                                {syncing
-                                    ? "Saving…"
-                                    : "Save pipeline settings"}
+                                {syncing ? "Saving…" : "Save pipeline settings"}
                             </button>
                             {pipelineSaved && (
                                 <p className="form-success">

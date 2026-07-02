@@ -1,0 +1,214 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Vestige — docker-compose.yml
+#
+# Four services:
+#   postgres        — always starts; shared by API and scraper
+#   api             — always starts; serves the Spring Boot REST layer on port 8080
+#   scraper-server  — always starts; long-running HTTP service the API calls for
+#                     "Run Now" (/run) and "Discover" (/discover/{id}) from the UI
+#   scraper         — manual only (profile: manual); one-shot pipeline container,
+#                     same image as scraper-server, used by cron/systemd scheduling
+#
+# Usage:
+#   docker-compose up                       start postgres + api + scraper-server
+#   docker-compose run scraper              run one scrape cycle manually
+#   docker-compose run scraper python tools/discover_selectors.py --pair-id 3 --commit                 run selector discovery for a pair
+#   docker-compose down                     stop everything
+#
+# All secrets come from the .env file in the project root.
+# Never commit .env — it is gitignored. Use .env.example as a template.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+    # ── PostgreSQL 18 ───────────────────────────────────────────────────────────
+    postgres:
+        image: postgres:18
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            POSTGRES_DB: vestige
+        ports:
+            # Expose to host so you can connect with psql, DBeaver, etc. during development.
+            # Remove this in production — only the api and scraper containers need access.
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql
+        healthcheck:
+            # depends_on with condition: service_healthy waits for this to pass before
+            # starting api or scraper, preventing connection errors on fresh boot.
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d vestige"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 30s
+        restart: unless-stopped
+
+    # ── Spring Boot API ─────────────────────────────────────────────────────────
+    api:
+        image: ghcr.io/udanfernando2006/vestige-api:latest
+        build:
+            context: ./api
+            cache_from:
+                - type=gha,scope=api
+            cache_to:
+                - type=gha,mode=max,scope=api
+        ports:
+            - "8080:8080"
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            # DB_HOST overrides 'localhost' in application.properties for the container network.
+            # The Spring Boot datasource URL is:
+            #   jdbc:postgresql://${DB_HOST:localhost}:5432/vestige
+            DB_HOST: postgres
+            # Shared log directory — the API reads run summaries that the scraper writes here.
+            LOG_DIR: /app/logs
+            # scraper-server is the always-on HTTP service /api/runs/trigger and
+            # /api/runs/discover/{id} call. Calling "python" directly never worked from
+            # inside this container — there's no Python runtime in the api image, and
+            # the scraper source isn't present here either.
+            SCRAPER_URL: http://scraper-server:8000
+            PYTHONIOENCODING: utf-8
+            SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
+        volumes:
+            # Mount the logs directory so the API can serve run history from the same
+            # files that the scraper writes to.
+            - ./logs:/app/logs
+        depends_on:
+            postgres:
+                condition: service_healthy
+            scraper-server:
+                condition: service_healthy
+        restart: unless-stopped
+
+    # ── Python scraper — always-on HTTP service ─────────────────────────────────
+    # Same image as `scraper` below, just started in --serve mode. This is what
+    # makes "Run Now" and "Discover" work from the UI. Must NOT have profiles: manual
+    # — it needs to be running whenever api is, so api can reach it over the network.
+    scraper-server:
+        image: ghcr.io/udanfernando2006/vestige-scraper:latest
+        build:
+            context: ./scraper
+            cache_from:
+                - type=gha,scope=scraper
+            cache_to:
+                - type=gha,mode=max,scope=scraper
+        command: ["python", "main.py", "--serve"]
+        environment:
+            # Database
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/vestige
+
+            # LLM configuration — role-based: SELECTOR_* powers selector discovery
+            # (discover_selectors.py / Path B), DIRECT_* powers direct extraction (Path D).
+            # Either can point at any OpenAI-compatible endpoint — Groq, Gemini's OpenAI-
+            # compat layer, OpenRouter, Anthropic's OpenAI-compat layer, or a local Ollama
+            # install. If Ollama runs on the host rather than in a container, use
+            # http://host.docker.internal:11434/v1 as the *_API_BASE value.
+            LLM_DISCOVERY_ENABLED: ${LLM_DISCOVERY_ENABLED:-false}
+            LLM_MODE: ${LLM_MODE:-direct}
+            SELECTOR_API_BASE: ${SELECTOR_API_BASE:-}
+            SELECTOR_API_KEY: ${SELECTOR_API_KEY:-}
+            SELECTOR_MODEL: ${SELECTOR_MODEL:-}
+            DIRECT_API_BASE: ${DIRECT_API_BASE:-}
+            DIRECT_API_KEY: ${DIRECT_API_KEY:-}
+            DIRECT_MODEL: ${DIRECT_MODEL:-}
+
+            # Email notifications — a UI-triggered run can change status just like a
+            # scheduled one, so this needs the same notification config.
+            SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+            SMTP_USER: ${SMTP_USER:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+            NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
+
+            LOG_DIR: /app/logs
+            PYTHONIOENCODING: utf-8
+            BOOKS_CONFIG_PATH: /app/books_config.json
+
+            SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
+        volumes:
+            - ./logs:/app/logs
+            - ./books_config.json:/app/books_config.json:ro
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 15s
+        depends_on:
+            postgres:
+                condition: service_healthy
+        restart: unless-stopped
+
+    # ── Python scraper pipeline — one-shot job ──────────────────────────────────
+    # profile: manual means this container does NOT start with `docker-compose up`.
+    # Run it on demand: docker-compose run scraper
+    # Schedule it externally: cron / systemd timer calls docker-compose run scraper
+    # Same image as scraper-server above, just without --serve — this one runs once
+    # and exits, unchanged from before.
+    scraper:
+        image: ghcr.io/udanfernando2006/vestige-scraper:latest
+        build:
+            context: ./scraper
+            cache_from:
+                - type=gha,scope=scraper
+            cache_to:
+                - type=gha,mode=max,scope=scraper
+        environment:
+            # Database
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/vestige
+
+            # LLM configuration — role-based: SELECTOR_* powers selector discovery
+            # (discover_selectors.py / Path B), DIRECT_* powers direct extraction (Path D).
+            # Either can point at any OpenAI-compatible endpoint — Groq, Gemini's OpenAI-
+            # compat layer, OpenRouter, Anthropic's OpenAI-compat layer, or a local Ollama
+            # install. If Ollama runs on the host rather than in a container, use
+            # http://host.docker.internal:11434/v1 as the *_API_BASE value.
+            LLM_DISCOVERY_ENABLED: ${LLM_DISCOVERY_ENABLED:-false}
+            LLM_MODE: ${LLM_MODE:-direct}
+            SELECTOR_API_BASE: ${SELECTOR_API_BASE:-}
+            SELECTOR_API_KEY: ${SELECTOR_API_KEY:-}
+            SELECTOR_MODEL: ${SELECTOR_MODEL:-}
+            DIRECT_API_BASE: ${DIRECT_API_BASE:-}
+            DIRECT_API_KEY: ${DIRECT_API_KEY:-}
+            DIRECT_MODEL: ${DIRECT_MODEL:-}
+
+            # Email notifications
+            SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+            SMTP_USER: ${SMTP_USER:-}
+            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+            NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
+
+            # Log directory inside the container — matches the volume mount below
+            LOG_DIR: /app/logs
+            PYTHONIOENCODING: utf-8
+
+            # Books configuration
+            BOOKS_CONFIG_PATH: /app/books_config.json
+
+            SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
+
+        volumes:
+            # Bind-mount the host logs/ directory so:
+            #   - Scraper writes logs to the host filesystem (survives container restarts)
+            #   - API container reads the same files via its own logs mount above
+            #   - You can inspect logs directly on the host without exec-ing into a container
+            - ./logs:/app/logs
+            - ./books_config.json:/app/books_config.json:ro
+        depends_on:
+            postgres:
+                condition: service_healthy
+        profiles:
+            - manual
+
+volumes:
+    postgres_data:

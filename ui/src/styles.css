@@ -612,3 +612,17 @@ button.run-log-toggle:active:not(:disabled) {
     gap: 12px;
     align-items: center;
 }
+
+.docker-terminal {
+    background: var(--color-titlebar);
+    color: var(--color-titlebar-fg);
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 1rem;
+    border: 2px solid var(--color-ink);
+    box-shadow: var(--shadow-window-sm);
+    white-space: pre-wrap;
+    max-height: 260px;
+    overflow-y: auto;
+}

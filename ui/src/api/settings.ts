@@ -43,3 +43,33 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
     cachedNotificationsEnabled = enabled; // applied immediately, same as setApiBaseUrl
 }
 
+// Whether the app should automatically start the local Docker stack on launch
+// and stop it (docker compose down only — never the Docker engine itself,
+// confirmed) on quit. Only ever consulted when the configured API base URL
+// resolves to localhost/127.0.0.1 — see App.tsx's gating logic. Defaults to
+// true so a fresh local install "just works" without a manual toggle visit.
+let cachedAutoDockerEnabled: boolean | null = null;
+
+export async function getAutoDockerEnabled(): Promise<boolean> {
+    if (cachedAutoDockerEnabled !== null) return cachedAutoDockerEnabled;
+    const stored = await store.get<boolean>("autoDockerEnabled");
+    cachedAutoDockerEnabled = stored ?? true;
+    return cachedAutoDockerEnabled;
+}
+
+export async function setAutoDockerEnabled(enabled: boolean): Promise<void> {
+    await store.set("autoDockerEnabled", enabled);
+    await store.save();
+    cachedAutoDockerEnabled = enabled;
+}
+
+/** Returns true only if the configured API base URL points at this machine. */
+export async function isLocalDeployment(): Promise<boolean> {
+    const url = await getApiBaseUrl();
+    try {
+        const hostname = new URL(url).hostname;
+        return hostname === "localhost" || hostname === "127.0.0.1";
+    } catch {
+        return false;
+    }
+}
