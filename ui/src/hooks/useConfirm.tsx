@@ -4,6 +4,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 interface ConfirmOptions {
     title?: string;
     confirmLabel?: string;
+    cancelLabel?: string;
     destructive?: boolean;
 }
 
@@ -48,6 +49,7 @@ export function useConfirm(): { confirm: (message: string, options?: ConfirmOpti
             title={state.title ?? "Confirm"}
             message={state.message}
             confirmLabel={state.confirmLabel ?? "Confirm"}
+            cancelLabel={state.cancelLabel ?? "Cancel"}
             destructive={state.destructive}
             onConfirm={() => resolve(true)}
             onCancel={() => resolve(false)}

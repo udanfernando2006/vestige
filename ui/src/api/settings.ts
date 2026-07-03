@@ -63,6 +63,34 @@ export async function setAutoDockerEnabled(enabled: boolean): Promise<void> {
     cachedAutoDockerEnabled = enabled;
 }
 
+// Tracks WHICH deployment context the auto-start prompt was last answered
+// under, not just whether it's ever been shown. "local" means it's been
+// answered for the current local session; null means it hasn't (either a
+// true first run, or the user has since switched away from localhost and
+// back — see App.tsx, which resets this to null whenever the configured
+// URL is non-local). This lets the prompt re-surface on a cloud→local
+// transition instead of being permanently silenced after the very first
+// answer, while still staying silent across repeated local launches that
+// never left the local context in between.
+let cachedAutoDockerPromptContext: string | null | undefined = undefined;
+
+export async function getAutoDockerPromptContext(): Promise<string | null> {
+    if (cachedAutoDockerPromptContext !== undefined) {
+        return cachedAutoDockerPromptContext;
+    }
+    const stored = await store.get<string | null>("autoDockerPromptContext");
+    cachedAutoDockerPromptContext = stored ?? null;
+    return cachedAutoDockerPromptContext;
+}
+
+export async function setAutoDockerPromptContext(
+    context: string | null,
+): Promise<void> {
+    await store.set("autoDockerPromptContext", context);
+    await store.save();
+    cachedAutoDockerPromptContext = context;
+}
+
 /** Returns true only if the configured API base URL points at this machine. */
 export async function isLocalDeployment(): Promise<boolean> {
     const url = await getApiBaseUrl();
