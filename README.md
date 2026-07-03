@@ -1,12 +1,14 @@
 # Vestige
 
-A config-driven book availability tracker for Sri Lankan online bookstores. Define books and stores in a JSON file, run the pipeline, and get notified the moment a tracked book comes into stock.
+A config-driven book availability tracker. Add books and stores through the desktop app, and Vestige scrapes price/stock on a schedule, notifying you the moment a tracked book comes into stock.
+
+Vestige is a full-stack system: a Python scraping pipeline, a Java Spring Boot API, a PostgreSQL database, and a Tauri desktop UI — all orchestrated by Docker Compose and installable as a single native app on Windows or Linux.
 
 ---
 
 ## How It Works
 
-Vestige runs a scraping pipeline on a schedule. For each book-store pair it tracks, it determines the fastest route to current availability data:
+Vestige runs a scraping pipeline on a schedule (or on demand via "Run Now"). For each book-store pair it tracks, it determines the fastest route to current availability data:
 
 | Path | Condition | What happens |
 |---|---|---|
@@ -17,7 +19,7 @@ Vestige runs a scraping pipeline on a schedule. For each book-store pair it trac
 
 Path C is the production fast path. Paths A and B are one-time setup paths that resolve to C. Path D trades selector maintenance for LLM cost on every run.
 
-Every result is written to PostgreSQL as an immutable snapshot row. A local JSON log is written per run under `logs/`. Email and desktop notifications fire when availability status changes.
+Every result is written to PostgreSQL as an immutable snapshot row. Status changes surface as OS desktop notifications via the Tauri app.
 
 ---
 
@@ -25,191 +27,121 @@ Every result is written to PostgreSQL as an immutable snapshot row. A local JSON
 
 | Layer | Technology |
 |---|---|
-| Scraping | Python, Playwright, BeautifulSoup |
-| Database | PostgreSQL 16, SQLAlchemy 2, psycopg3 |
-| LLM | OpenRouter or Anthropic API (via OpenAI-compatible client) |
-| Config | `books_config.json`, `python-dotenv` |
-| CI | GitHub Actions |
+| Scraper pipeline | Python, FastAPI, Playwright, SQLAlchemy |
+| API | Java Spring Boot 4.1, Hibernate (validate-only), PostgreSQL 18 |
+| Desktop UI | Tauri 2.x, React 19, TypeScript |
+| Orchestration | Docker Compose |
+| LLM | Any OpenAI-compatible endpoint (e.g. Groq, free tier) |
+| Cloud deploy (optional) | Terraform — AWS, Azure, GCP |
 
 ---
 
-## Project Structure
+## Install & Run (recommended — no dev tools required)
 
+This is the normal way to run Vestige. It gets you a native desktop app backed by a local Docker stack.
+
+### 1. Install Docker Desktop
+
+Docker Engine must be installed and **running** before you launch Vestige.
+
+- [Download Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Linux)
+- Install it, then start it and make sure it's running (check for the whale icon in your system tray / taskbar)
+
+### 2. Download the Vestige installer
+
+Grab the latest installer from the project's [GitHub Releases](../../releases) page:
+
+- **Windows** — `Vestige_x.y.z_x64-setup.exe` (NSIS) or the `.msi`
+- **Linux** — the `.AppImage`
+
+### 3. Run the installer
+
+Standard install — accept the defaults unless you have a reason not to.
+
+### 4. First launch — Docker auto-start prompt
+
+On first launch (when pointed at a local backend), Vestige asks whether it should automatically start and stop the local Docker stack for you:
+
+- **Enable auto-start** — Vestige runs `docker compose up -d` when it opens and `docker compose down` when you quit. Nothing further to do — skip to Step 6.
+- **Not now** — Vestige will not manage Docker for you. Continue to Step 5.
+
+You can change this choice later from **Settings → Local backend automation**.
+
+### 5. (If you opted out) Start the stack manually
+
+Open a terminal in Vestige's app-data folder — this is where the installer seeded `docker-compose.yml`, `.env`, and `books_config.json`:
+
+- **Windows:** `%APPDATA%\vestige\`
+- **Linux:** `~/.local/share/vestige/`
+
+Then run:
+
+```bash
+docker compose up -d
 ```
-vestige/
-├── scraper/
-│   ├── main.py                     # Entry point — run this to start a pipeline run
-│   ├── browser/
-│   │   └── session.py              # BrowserSession — shared Playwright abstraction
-│   ├── pipeline/
-│   │   ├── orchestrator.py         # Routes each pair through the correct path
-│   │   ├── crawler.py              # Finds product URLs via store search
-│   │   ├── scraper.py              # Extracts price and stock via CSS selectors
-│   │   └── llm_extractor.py        # LLM-based selector discovery and direct extraction
-│   ├── tools/
-│   │   └── discover_selectors.py   # Offline CLI tool for selector discovery
-│   ├── db/
-│   │   ├── models.py               # SQLAlchemy ORM models
-│   │   └── writer.py               # All database reads and writes
-│   ├── storage/
-│   │   └── local_logger.py         # Writes run summaries to logs/
-│   ├── notifications/
-│   │   ├── email_notifier.py       # Email via Gmail SMTP
-│   │   └── desktop_notifier.py     # Windows toast via plyer
-│   ├── models/
-│   │   └── result.py               # AvailabilityResult dataclass
-│   ├── tests/                      # pytest test suite
-│   ├── requirements.txt            # Runtime dependencies
-│   ├── requirements-dev.txt        # Testing, linting, and security tooling
-│   └── pyproject.toml              # pytest configuration
-├── logs/                           # Run logs written here (gitignored)
-├── books_config.json               # Your books, stores, and tracking pairs
-├── .env.example                    # Template — copy to .env and fill in
-└── docker-compose.yml              # PostgreSQL for local development
-```
+
+(Drop the `-d` if you want to watch the container logs in that terminal instead of running detached.)
+
+### 6. Get a free LLM API key (Groq)
+
+Vestige uses an LLM only for one-time CSS selector discovery per book/store pair (Path B) or, optionally, for direct-extraction mode (Path D) — not for every scrape. Groq's free tier works well for this:
+
+1. Go to the [Groq Console](https://console.groq.com) and create a free API key.
+2. Check your org's **Organization Limits → Chat Completions** page to see which models are available on the free tier and their rate limits (requests/tokens per minute and per day).
+3. Pick two models:
+   - **Selector discovery (`SELECTOR_MODEL`)** — needs to read a full (if trimmed) HTML product page, so a large context/token budget matters most. `meta-llama/llama-4-scout-17b-16e-instruct` (30K tokens/minute on the free tier) is a solid choice for this.
+   - **Direct extraction (`DIRECT_MODEL`)** — runs on every scrape for Path D pairs, so speed/cost matters more than raw context size. `llama-3.3-70b-versatile` (12K TPM) or `groq/compound` (70K TPM, no daily token cap, but newer — worth testing against your pages first) are good candidates.
+
+   Both models above speak the standard OpenAI chat-completions format, so either works with Vestige's role-based LLM config without any code changes.
+
+### 7. Add your API key and models to Vestige
+
+Pick **one** of these — they have the same effect:
+
+**Option A — Settings page (recommended, no restart needed):**
+1. Open Vestige → **Settings**.
+2. Under **Pipeline configuration**, set:
+   - `Selector API Base` → `https://api.groq.com/openai/v1`
+   - `Selector API Key` → your Groq key
+   - `Selector Model` → `meta-llama/llama-4-scout-17b-16e-instruct`
+   - `Direct API Base` → `https://api.groq.com/openai/v1`
+   - `Direct API Key` → your Groq key
+   - `Direct Model` → `llama-3.3-70b-versatile` (or whichever you settled on)
+3. Save. Changes apply on the very next pipeline run — no restart required.
+
+**Option B — Edit `.env` directly:**
+1. Open the `.env` file in your app-data folder (same folder as Step 5).
+2. Fill in:
+   ```env
+   SELECTOR_API_BASE=https://api.groq.com/openai/v1
+   SELECTOR_API_KEY=your-groq-key-here
+   SELECTOR_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+   DIRECT_API_BASE=https://api.groq.com/openai/v1
+   DIRECT_API_KEY=your-groq-key-here
+   DIRECT_MODEL=llama-3.3-70b-versatile
+   LLM_DISCOVERY_ENABLED=true
+   LLM_MODE=selector
+   ```
+3. Restart the app (or restart the Docker stack: `docker compose down && docker compose up -d`) for `.env` changes to take effect — unlike Settings-page changes, these are only read at container startup.
+
+> API keys entered via the Settings page are encrypted at rest (AES-256-GCM) and never echoed back to the UI — only a "configured" indicator and a masked hint are shown.
+
+### 8. Add your books, stores, and tracking pairs
+
+In the Vestige UI:
+
+1. **Stores** — add each bookstore you want to track (name + base URL).
+2. **Books** — add the books you want to track (name + ISBN), optionally grouped into a series.
+3. **Tracking** — pair each book with a store. Leave the product URL blank to let the Crawler find it automatically, or paste it directly if you already have it.
+4. Click **Run Now** on the Dashboard.
+
+On the pipeline's first pass, pairs without cached selectors go through one-time LLM-assisted discovery (Path B) using your `SELECTOR_MODEL`. After that, they run the fast selector-based path (Path C) on every subsequent scrape. You'll get an OS notification whenever a tracked book's stock status or price changes.
 
 ---
 
-## Setup
+## Cloud Deployment (optional)
 
-### Prerequisites
-
-- Python 3.12+
-- PostgreSQL 16 (or Docker for the compose approach below)
-- An OpenRouter or Anthropic API key (only required if using LLM features)
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/udanfernando2006/vestige.git
-cd vestige
-```
-
-### 2. Create a virtual environment and install dependencies
-
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-
-pip install -r scraper/requirements.txt
-playwright install chromium
-```
-
-### 3. Start PostgreSQL
-
-If you have Docker, the compose file handles it:
-
-```bash
-docker-compose up -d postgres
-```
-
-Or point at an existing PostgreSQL instance by setting `DATABASE_URL` in your `.env`.
-
-### 4. Create the database and user
-
-```sql
-CREATE DATABASE vestige;
-CREATE USER booktracker WITH PASSWORD 'yourpassword';
-GRANT ALL PRIVILEGES ON DATABASE vestige TO booktracker;
-
-\c vestige
-GRANT ALL ON SCHEMA public TO booktracker;
-```
-
-### 5. Configure environment variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` — the required fields are:
-
-```env
-DATABASE_URL=postgresql+psycopg://booktracker:yourpassword@localhost:5432/vestige
-POSTGRES_USER=booktracker
-POSTGRES_PASSWORD=yourpassword
-
-# LLM — set LLM_DISCOVERY_ENABLED=false to skip LLM entirely on first run
-LLM_DISCOVERY_ENABLED=false
-LLM_MODE=direct
-LLM_ENGINE=cloud
-LLM_PROVIDER=openrouter
-LLM_MODEL=anthropic/claude-haiku-4-5
-OPENROUTER_API_KEY=
-
-# Notifications
-SMTP_HOST=smtp.gmail.com
-SMTP_USER=
-SMTP_PASSWORD=
-NOTIFY_EMAIL=
-```
-
-### 6. Configure books and stores
-
-Edit `books_config.json`:
-
-```json
-{
-  "series": [
-    { "name": "The Witcher" }
-  ],
-  "books": [
-    {
-      "name": "The Last Wish",
-      "isbn": "9780316452465",
-      "is_series_entry": true,
-      "series_name": "The Witcher"
-    }
-  ],
-  "stores": [
-    { "name": "sarasavi", "base_url": "https://sarasavi.lk", "search_url_template": null },
-    { "name": "vijitha_yapa", "base_url": "https://vijithayapa.com", "search_url_template": null }
-  ],
-  "tracking": [
-    { "isbn": "9780316452465", "store": "sarasavi", "product_url": null },
-    { "isbn": "9780316452465", "store": "vijitha_yapa", "product_url": null }
-  ],
-  "notifications": {
-    "email": "you@example.com",
-    "desktop": true
-  }
-}
-```
-
-Set `product_url` to `null` to have the Crawler find it automatically, or supply it directly to skip crawling.
-
-### 7. Run the pipeline
-
-```bash
-cd scraper
-python main.py
-```
-
-On first run, `sync_config` seeds the database from `books_config.json`. The Orchestrator then routes each tracking pair through the appropriate path. Results are written to PostgreSQL and a log file is created under `logs/`.
-
----
-
-## LLM Selector Discovery
-
-If a product URL is known but CSS selectors are not yet cached, you can run discovery manually without triggering a full pipeline run:
-
-```bash
-# Preview suggested selectors (no database changes)
-python scraper/tools/discover_selectors.py --pair-id 1
-
-# Validate and commit selectors to the database
-python scraper/tools/discover_selectors.py --pair-id 1 --commit
-
-# Run against a URL directly
-python scraper/tools/discover_selectors.py --url "https://sarasavi.lk/books/..." --store sarasavi
-```
-
-Requires `LLM_PROVIDER` and the corresponding API key to be set in `.env`. Ollama is not supported for selector discovery — use `openrouter` or `anthropic`.
+Vestige can also run on AWS, Azure, or GCP instead of a local Docker stack, provisioned via Terraform. This is a separate, more advanced path intended for continuous unattended scraping rather than everyday desktop use — see the project's cloud deployment blueprint for the full toolchain setup, credential hardening, and teardown steps for each provider.
 
 ---
 
@@ -227,45 +159,17 @@ Requires `LLM_PROVIDER` and the corresponding API key to be set in `.env`. Ollam
 
 ---
 
-## Running Tests
+## Development Setup
 
-```bash
-cd scraper
+The instructions above are for running the packaged app. If you want to build Vestige from source, run its test suites, or contribute:
 
-# Unit tests only (no database required)
-pytest tests/unit -v
+- `scraper/` — Python FastAPI service (Playwright, SQLAlchemy). See its own `requirements.txt`/`requirements-dev.txt`.
+- `api/` — Java Spring Boot 4.1 service (JDK 25, Maven wrapper).
+- `ui/` — Tauri 2.x + React 19 + TypeScript desktop app (npm, Vite).
+- `infra/` — Terraform configs for AWS/Azure/GCP.
+- `docker-compose.yml` at the repo root builds all services locally with `--build` instead of pulling published images.
 
-# Integration tests (requires PostgreSQL)
-pytest tests/integration -v
-
-# E2E tests (requires PostgreSQL; browser and LLM are mocked)
-pytest tests/e2e -v
-
-# Full suite
-pytest
-```
-
-Integration and E2E tests require a `vestige_test` database. Follow the same steps as the main database setup, substituting `vestige_test` for `vestige`, then create `scraper/.env.test` with the test `DATABASE_URL`.
-
----
-
-## Environment Variable Reference
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | psycopg3 connection string |
-| `LLM_DISCOVERY_ENABLED` | No | `true` to auto-run selector discovery in the pipeline; default `false` |
-| `LLM_MODE` | No | `direct` (LLM reads HTML each run) or `selector` (CSS selectors cached); default `selector` |
-| `LLM_ENGINE` | No | `cloud` or `local`; controls HTML attribute stripping before LLM call |
-| `LLM_PROVIDER` | No | `openrouter` or `anthropic` |
-| `LLM_MODEL` | No | Model string, e.g. `anthropic/claude-haiku-4-5` |
-| `OPENROUTER_API_KEY` | If using OpenRouter | |
-| `ANTHROPIC_API_KEY` | If using Anthropic | |
-| `SMTP_HOST` | No | Required for email notifications |
-| `SMTP_USER` | No | Gmail address |
-| `SMTP_PASSWORD` | No | Gmail App Password |
-| `NOTIFY_EMAIL` | No | Recipient address for notifications |
-| `LOG_DIR` | No | Directory for run log files; default `logs` |
+Full architecture, module maps, and API contracts are documented in the project's blueprint files (`vestige_guide.md`, `vestige_api_implementation.md`, `vestige_ui_implementation.md`, `vestige_publishing_guide.md`, `vestige_cloud_deployment.md`). A CI pipeline (GitHub Actions) runs the Python and Java test suites on every push; a separate tag-triggered workflow builds and publishes the Docker images and desktop installers referenced in the Install & Run section above.
 
 ---
 
