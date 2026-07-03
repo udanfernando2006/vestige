@@ -50,7 +50,7 @@ fn vestige_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?;
-    Ok(base) // Tauri's app_data_dir() already resolves to .../Vestige/ given productName "Vestige"
+    Ok(base) // Tauri's app_data_dir() already resolves to .../Vestige/ given identifier is "Vestige"
 }
 
 /// Copies bundled resources into the writable app-data directory on first run only.
