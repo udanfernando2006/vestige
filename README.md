@@ -229,7 +229,3 @@ The instructions above are for running the packaged app. If you want to build Ve
 A CI pipeline (GitHub Actions) runs the Python and Java test suites on every push; a separate tag-triggered workflow builds and publishes the Docker images and desktop installers referenced in the Install & Run section above.
 
 ---
-
-## Author
-
-**Udan Fernando**
