@@ -1,4 +1,4 @@
-# Vestige
+# <img src="ui/src-tauri/icons/Square310x310Logo.png" alt="Vestige logo" width="40" height="40" valign="middle"> Vestige
 
 A config-driven book availability tracker. Add books and stores through the desktop app, and Vestige scrapes price/stock on a schedule, notifying you the moment a tracked book comes into stock.
 
@@ -47,6 +47,8 @@ Docker Engine must be installed and **running** before you launch Vestige.
 - [Download Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Linux)
 - Install it, then start it and make sure it's running (check for the whale icon in your system tray / taskbar)
 
+> **System requirements (observed, not a hard spec):** budget a few GB of free disk space just for the Docker images (Postgres, the API, and the Python scraper/Playwright image). At runtime, expect memory usage in the range of ~2.8–2.9GB while a scrape is active — the headless browser (Playwright/Chromium) driving the scraper is the main contributor. This was measured on Windows 11 with 16GB of RAM, where it ran comfortably; on a machine with 8GB or less, keep an eye on Task Manager during your first run.
+
 ### 2. Download the Vestige installer
 
 Grab the latest installer from the project's [GitHub Releases](../../releases) page:
@@ -67,20 +69,47 @@ On first launch (when pointed at a local backend), Vestige asks whether it shoul
 
 You can change this choice later from **Settings → Local backend automation**.
 
-### 5. (If you opted out) Start the stack manually
+> **Closing the window does not quit Vestige.** Clicking the window's close (X) button just hides it to the system tray — the app keeps running in the background so notification polling keeps working. To actually quit, **right-click the Vestige icon in the system tray and choose Quit.** If auto-start is enabled, quitting this way is also what triggers `docker compose down` — the whole stack shuts down together. If auto-start is off, quitting the app does **not** stop Docker (see Step 5's warning below) — the containers keep running until you stop them yourself.
+
+### 5. (If you opted out) Start and stop the stack manually
+
+> **If you turned auto-start off — in the first-run prompt or later in Settings — Docker is entirely your responsibility.** Vestige will not stop the containers for you when you quit. Get comfortable with the "stop" command below before you forget the stack is running in the background.
 
 Open a terminal in Vestige's app-data folder — this is where the installer seeded `docker-compose.yml`, `.env`, and `books_config.json`:
 
 - **Windows:** `%APPDATA%\vestige\`
 - **Linux:** `~/.local/share/vestige/`
 
-Then run:
+**Windows — quickest way to open a terminal there:**
+1. Press **Win + R**, type `%APPDATA%\vestige`, and hit Enter — this opens the folder in File Explorer.
+2. Click into the address bar at the top of the Explorer window, type `cmd` (or `pwsh` for PowerShell), and hit Enter. A terminal opens already `cd`'d into that folder.
 
+**Linux:** open a terminal and `cd ~/.local/share/vestige/`.
+
+**Start the stack:**
 ```bash
 docker compose up -d
 ```
+(Drop the `-d` if you want to watch the container logs live in that same terminal instead of running detached.)
 
-(Drop the `-d` if you want to watch the container logs in that terminal instead of running detached.)
+**Stop the stack** (do this whenever you're done using Vestige, since nothing does it automatically if auto-start is off):
+```bash
+docker compose down
+```
+This stops and removes the containers but leaves your database volume intact — your tracked books/history are safe.
+
+> `docker compose down -v` additionally deletes the named volumes tied to *this specific* `docker-compose.yml` — for Vestige, that means wiping the Postgres volume (`postgres_data`), i.e. every book, store, tracking pair, and snapshot you've recorded. It does **not** touch volumes belonging to other Docker Compose projects or containers elsewhere on your machine — the `-v` flag is scoped to the current project, not global — but within that scope it is a full reset of Vestige's own data. Only run it if you actually want to start over from empty.
+
+**Check the logs** (useful for diagnosing an `ERROR` status or a scrape that isn't behaving):
+```bash
+# All containers, live-following
+docker compose logs -f
+
+# Just one container (api, scraper-server, postgres)
+docker compose logs -f api
+docker compose logs -f scraper-server
+```
+Press **Ctrl+C** to stop following without stopping the containers themselves.
 
 ### 6. Get a free LLM API key (Groq)
 
@@ -89,10 +118,12 @@ Vestige uses an LLM only for one-time CSS selector discovery per book/store pair
 1. Go to the [Groq Console](https://console.groq.com) and create a free API key.
 2. Check your org's **Organization Limits → Chat Completions** page to see which models are available on the free tier and their rate limits (requests/tokens per minute and per day).
 3. Pick two models:
-   - **Selector discovery (`SELECTOR_MODEL`)** — needs to read a full (if trimmed) HTML product page, so a large context/token budget matters most. `meta-llama/llama-4-scout-17b-16e-instruct` (30K tokens/minute on the free tier) is a solid choice for this.
-   - **Direct extraction (`DIRECT_MODEL`)** — runs on every scrape for Path D pairs, so speed/cost matters more than raw context size. `llama-3.3-70b-versatile` (12K TPM) or `groq/compound` (70K TPM, no daily token cap, but newer — worth testing against your pages first) are good candidates.
+   - **Selector discovery (`SELECTOR_MODEL`)** — needs to read a full (if trimmed) HTML product page, so a large context/token budget matters most. `meta-llama/llama-4-scout-17b-16e-instruct` (30K tokens/minute on the free tier) worked reliably in testing.
+   - **Direct extraction (`DIRECT_MODEL`)** — runs on every scrape for Path D pairs, so speed/cost matters more than raw context size. `llama-3.3-70b-versatile` (12K TPM) worked reliably in testing. `groq/compound` looked appealing on paper (70K TPM, no daily token cap) but **did not work** for this role in practice — stick with `llama-3.3-70b-versatile` unless you've specifically re-tested `groq/compound` against your own pages.
 
-   Both models above speak the standard OpenAI chat-completions format, so either works with Vestige's role-based LLM config without any code changes.
+   Both models speak the standard OpenAI chat-completions format, so either works with Vestige's role-based LLM config without any code changes.
+
+   > **Rate limits can surface as pair status, not just an error message.** If you hit a model's requests-per-minute/day or tokens-per-minute/day cap mid-run, a pair can land in `NEEDS_SETUP` (discovery couldn't complete) or stay in `PENDING` (waiting on a run that didn't get to it) instead of the status you expected. If pairs seem stuck, check whether you're bumping into the free-tier limits shown on the Groq Organization Limits page before assuming something's broken.
 
 ### 7. Add your API key and models to Vestige
 
@@ -135,13 +166,39 @@ In the Vestige UI:
 3. **Tracking** — pair each book with a store. Leave the product URL blank to let the Crawler find it automatically, or paste it directly if you already have it.
 4. Click **Run Now** on the Dashboard.
 
-On the pipeline's first pass, pairs without cached selectors go through one-time LLM-assisted discovery (Path B) using your `SELECTOR_MODEL`. After that, they run the fast selector-based path (Path C) on every subsequent scrape. You'll get an OS notification whenever a tracked book's stock status or price changes.
+On the pipeline's first pass, pairs without cached selectors go through one-time LLM-assisted discovery (Path B) using your `SELECTOR_MODEL`. After that, they run the fast selector-based path (Path C) on every subsequent scrape.
+
+### Verifying LLM-discovered selectors (recommended)
+
+LLMs don't guarantee correct output, and a wrong selector can silently return stale or empty data instead of failing loudly. **Before trusting a newly-discovered selector, it's worth manually confirming it against the live page** — this is admittedly a bit of an anti-pattern for a tool meant to run unattended, but it's the honest tradeoff of using an LLM for this step rather than hand-written selectors.
+
+For any pair sitting in `NEEDS_SETUP` (or after running the on-demand **Discover** button from the Tracking page), check the suggested selector using your browser's DevTools:
+
+1. Open the product page in your regular browser.
+2. Right-click the **price** on the page → **Inspect** (Chrome/Edge) or **Inspect Element** (Firefox). This opens DevTools with that exact HTML element highlighted.
+3. In DevTools, right-click the highlighted element → **Copy → Copy selector**, or just read off its `class`/`id` attributes directly from the highlighted line.
+4. Compare that against the selector Vestige suggested. They don't need to be identical strings — Vestige's are often written as wildcard attribute selectors (e.g. `div[class*='price']`) to survive framework-hashed class names — but they should be pointing at the same element.
+5. Still in DevTools, use **Ctrl+F** inside the **Elements** panel (or the DevTools-wide search) to search for the suggested selector directly and confirm it matches exactly one element, not zero or several.
+6. Repeat for the stock/availability selector.
+7. Only then save the selector (or accept the pipeline's own `--commit`ed one) — if something looks off, edit it manually in the Tracking page before saving.
+
+### Notifications only cover availability/price changes
+
+Desktop notifications fire **only when a tracked pair's stock status or price actually changes** between runs — not on every run, and not on errors. A `0 changes` run is often completely normal (nothing changed, or the database has nothing yet to diff against) and produces no notification, which is expected behavior, not a sign anything's broken.
+
+This also means **errors and stuck pairs won't notify you** — a pair sitting in `ERROR` or `NEEDS_SETUP` produces no popup. Check the **Dashboard** or **Tracking** page in the UI periodically to catch these rather than relying on notifications alone.
 
 ---
 
 ## Cloud Deployment (optional)
 
-Vestige can also run on AWS, Azure, or GCP instead of a local Docker stack, provisioned via Terraform. This is a separate, more advanced path intended for continuous unattended scraping rather than everyday desktop use — see the project's cloud deployment blueprint for the full toolchain setup, credential hardening, and teardown steps for each provider.
+Vestige can also run on AWS, Azure, or GCP instead of a local Docker stack, provisioned via Terraform. This is a separate, more advanced path intended for continuous unattended scraping rather than everyday desktop use.
+
+Full step-by-step guides for each provider (toolchain setup, credential hardening, provisioning, deployment, and teardown) are in [`/guides`](guides/):
+
+- [Deploying to AWS](guides/vestige_deploy_aws.md)
+- [Deploying to Azure](guides/vestige_deploy_azure.md)
+- [Deploying to GCP](guides/vestige_deploy_gcp.md)
 
 ---
 
@@ -169,7 +226,7 @@ The instructions above are for running the packaged app. If you want to build Ve
 - `infra/` — Terraform configs for AWS/Azure/GCP.
 - `docker-compose.yml` at the repo root builds all services locally with `--build` instead of pulling published images.
 
-Full architecture, module maps, and API contracts are documented in the project's blueprint files (`vestige_guide.md`, `vestige_api_implementation.md`, `vestige_ui_implementation.md`, `vestige_publishing_guide.md`, `vestige_cloud_deployment.md`). A CI pipeline (GitHub Actions) runs the Python and Java test suites on every push; a separate tag-triggered workflow builds and publishes the Docker images and desktop installers referenced in the Install & Run section above.
+A CI pipeline (GitHub Actions) runs the Python and Java test suites on every push; a separate tag-triggered workflow builds and publishes the Docker images and desktop installers referenced in the Install & Run section above.
 
 ---
 
