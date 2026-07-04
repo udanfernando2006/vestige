@@ -3613,6 +3613,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-single-instance"
+version = "2.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8f29386f5e9fdc699182388a33ee80a56de436d91b67459e86afef426282af"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.18",
+ "tracing",
+ "windows-sys 0.60.2",
+ "zbus",
+]
+
+[[package]]
 name = "tauri-plugin-store"
 version = "2.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4145,23 +4160,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ui"
-version = "1.0.0"
-dependencies = [
- "base64 0.22.1",
- "rand 0.8.6",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "tokio",
-]
-
-[[package]]
 name = "unic-char-property"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4274,6 +4272,24 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vestige-ui"
+version = "1.4.0"
+dependencies = [
+ "base64 0.22.1",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tokio",
+]
 
 [[package]]
 name = "vswhom"

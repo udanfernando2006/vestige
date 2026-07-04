@@ -27,10 +27,6 @@ services:
             POSTGRES_USER: ${POSTGRES_USER}
             POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
             POSTGRES_DB: vestige
-        ports:
-            # Expose to host so you can connect with psql, DBeaver, etc. during development.
-            # Remove this in production — only the api and scraper containers need access.
-            - "5432:5432"
         volumes:
             - postgres_data:/var/lib/postgresql
         healthcheck:

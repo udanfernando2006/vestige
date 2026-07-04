@@ -48,6 +48,8 @@ export default function App() {
     const [dockerStatus, setDockerStatus] = useState<DockerStatus>("idle");
     const [dockerLog, setDockerLog] = useState<string[]>([]);
     const dockerFlowStarted = useRef(false);
+    const dockerLogRef = useRef<HTMLPreElement>(null);
+    const pinnedToBottom = useRef(true);
     const { confirm, dialog } = useConfirm();
 
     const probe = useCallback(async () => {
@@ -68,6 +70,21 @@ export default function App() {
         console.log("[vestige]", line);
         setDockerLog((prev) => [...prev, line]);
     }, []);
+
+    const handleDockerLogScroll = useCallback(() => {
+        const el = dockerLogRef.current;
+        if (!el) return;
+        // Small tolerance so landing within a few px of the bottom still counts as "at bottom".
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+        pinnedToBottom.current = atBottom;
+    }, []);
+
+    useEffect(() => {
+        const el = dockerLogRef.current;
+        if (el && pinnedToBottom.current) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [dockerLog]);
 
     const startDockerFlow = useCallback(async () => {
         if (dockerFlowStarted.current) return;
@@ -119,6 +136,15 @@ export default function App() {
     }, []);
 
     useEffect(() => {
+        const unlisten = listen<string>("docker-log", (event) => {
+            appendLog(event.payload);
+        });
+        return () => {
+            unlisten.then((f) => f());
+        };
+    }, [appendLog]);
+
+    useEffect(() => {
         const unlisten = listen("quit-requested", async () => {
             const local = await isLocalDeployment();
             const autoEnabled = await getAutoDockerEnabled();
@@ -156,7 +182,6 @@ export default function App() {
                 // switch back to localhost re-triggers the prompt instead
                 // of silently reusing whatever was answered last time.
                 await setAutoDockerPromptContext(null);
-            
             }
             startDockerFlow();
         })();
@@ -174,7 +199,10 @@ export default function App() {
                         </div>
                         <div className="vestige-window-body backend-gate-body">
                             <div className="docker-loader" />
-                            <pre className="docker-terminal">
+                            <pre
+                                className="docker-terminal"
+                                ref={dockerLogRef}
+                                onScroll={handleDockerLogScroll}>
                                 {dockerLog.join("\n")}
                             </pre>
                         </div>
