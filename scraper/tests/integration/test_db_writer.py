@@ -1,6 +1,14 @@
+import os
+import base64
+import secrets
+import pytest
+from unittest.mock import patch
 from datetime import datetime, timezone
 
 from models.result import AvailabilityResult
+from db.models import SettingOverride
+from db.writer import DBWriter
+from security.crypto import SettingsCipher
 
 # ---------------------------------------------------------------------------
 # Helpers — seed minimum required rows
@@ -226,3 +234,108 @@ class TestStoreSearchTemplate:
         db_writer.update_store_search_template(store.id, template)
         updated = db_writer.get_store(store.id)
         assert updated["search_url_template"] == template
+
+
+# ---------------------------------------------------------------------------
+# Settings & Configuration
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def valid_cipher():
+    """Provides a functional cipher instance using a compliant generated key."""
+    raw_key = secrets.token_bytes(32)
+    key_b64 = base64.urlsafe_b64encode(raw_key).decode("ascii")
+    return SettingsCipher(key_b64)
+
+
+class TestSettings:
+    def test_constructor_cipher_param_is_actually_wired(self, db_session, valid_cipher):
+        """Regression test: catches the case where __init__ stores the cipher
+        under a different attribute name than the rest of the class reads from."""
+        engine = db_session.get_bind()
+        writer = DBWriter(engine, cipher=valid_cipher)
+        writer.apply_setting_update("SELECTOR_API_KEY", "secret123")
+        assert writer.get_settings()["SELECTOR_API_KEY"] == "secret123"
+
+    def test_get_settings_precedence_and_fallback(self, db_writer):
+        """Verifies that DB overrides take priority over env vars, falling back safely when missing."""
+        # 1. Fallback case: DB is empty, should extract from process environment
+        with patch.dict(
+            os.environ,
+            {"SELECTOR_MODEL": "env-fallback-model", "DIRECT_MODEL": "env-direct"},
+        ):
+            settings = db_writer.get_settings()
+            assert settings["SELECTOR_MODEL"] == "env-fallback-model"
+            assert settings["DIRECT_MODEL"] == "env-direct"
+
+        # 2. Precedence case: DB has a record, should override environment entirely
+        db_writer.apply_setting_update("SELECTOR_MODEL", "db-priority-model")
+        with patch.dict(os.environ, {"SELECTOR_MODEL": "env-fallback-model"}):
+            settings = db_writer.get_settings()
+            assert settings["SELECTOR_MODEL"] == "db-priority-model"
+
+    def test_encrypted_vs_plain_storage_logic(
+        self, db_writer, db_session, valid_cipher
+    ):
+        """Verifies secret key categories get encrypted at rest, whereas typical config properties sit plain."""
+        # Temporarily inject the valid cipher into the existing db_writer fixture
+        db_writer._cipher = valid_cipher
+
+        secret_raw = "sk-live-secret-payload-9988"
+        plain_model = "claude-3-5-sonnet"
+
+        db_writer.apply_setting_update("SELECTOR_API_KEY", secret_raw)
+        db_writer.apply_setting_update("SELECTOR_MODEL", plain_model)
+
+        secret_row = db_session.get(SettingOverride, "SELECTOR_API_KEY")
+        model_row = db_session.get(SettingOverride, "SELECTOR_MODEL")
+
+        # Verify secret key encryption metrics
+        assert secret_row.is_encrypted is True
+        assert secret_row.value != secret_raw
+        assert valid_cipher.decrypt(secret_row.value) == secret_raw
+
+        # Verify common configuration visibility metrics
+        assert model_row.is_encrypted is False
+        assert model_row.value == plain_model
+
+    def test_clear_via_empty_string(self, db_writer):
+        """Verifies that passing an empty string deletes the DB override row, triggering fallback."""
+        db_writer.apply_setting_update("SELECTOR_MODEL", "temporary-override-value")
+        assert db_writer.get_settings()["SELECTOR_MODEL"] == "temporary-override-value"
+
+        # Wipe the database override row out
+        with patch.dict(os.environ, {"SELECTOR_MODEL": "original-env-system"}):
+            db_writer.apply_setting_update("SELECTOR_MODEL", "")
+
+            # Subsequent requests must cascade to the native environment
+            settings = db_writer.get_settings()
+            assert settings["SELECTOR_MODEL"] == "original-env-system"
+
+    def test_secret_persistence_without_cipher_raises_runtime_error(self, db_writer):
+        """Verifies write actions reject updates to encrypted keys if the encryption key is missing."""
+        # Ensure the cipher is None for this test
+        db_writer._cipher = None
+
+        with pytest.raises(
+            RuntimeError, match="SETTINGS_ENCRYPTION_KEY isn't configured"
+        ):
+            db_writer.apply_setting_update("SELECTOR_API_KEY", "prohibited-write")
+
+    def test_scrape_interval_hours_plaintext_flow(self, db_writer):
+        """Verifies that SCRAPE_INTERVAL_HOURS flows as a plaintext configuration value."""
+        # 1. Test setting a value through apply_setting_update
+        db_writer.apply_setting_update("SCRAPE_INTERVAL_HOURS", "12")
+        assert db_writer.get_settings()["SCRAPE_INTERVAL_HOURS"] == "12"
+
+        # 2. Test status retrieval
+        status = db_writer.get_settings_status()
+        assert "SCRAPE_INTERVAL_HOURS" in status
+        assert status["SCRAPE_INTERVAL_HOURS"] == "12"
+
+        # 3. Test explicit clear via empty string (triggers fallback cascading)
+        with patch.dict(os.environ, {"SCRAPE_INTERVAL_HOURS": ""}):
+            db_writer.apply_setting_update("SCRAPE_INTERVAL_HOURS", "")
+            settings = db_writer.get_settings()
+            assert settings.get("SCRAPE_INTERVAL_HOURS", "") == ""

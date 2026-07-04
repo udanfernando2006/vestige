@@ -10,7 +10,6 @@ import java.util.Optional;
 
 public interface AvailabilitySnapshotRepository extends JpaRepository<AvailabilitySnapshot, Long> {
 
-    // Latest snapshot per tracking pair — used for the dashboard current-status view
     @Query("""
         SELECT a FROM AvailabilitySnapshot a
         JOIN FETCH a.pair p
@@ -24,19 +23,31 @@ public interface AvailabilitySnapshotRepository extends JpaRepository<Availabili
     """)
     List<AvailabilitySnapshot> findLatestPerPair();
 
-    // Full history for a book across all stores, newest first, with optional limit
+    // Generalized history query — replaces findByBookIsbn(isbn, pageable), which
+    // only fetched p.store and not p.book (fine when scoped to one isbn already —
+    // not fine once history can span every book, since bookName needs that join).
+    // Every filter here is optional: pass null for any one you don't want applied.
     @Query("""
         SELECT a FROM AvailabilitySnapshot a
         JOIN FETCH a.pair p
-        JOIN FETCH p.store
-        WHERE p.book.isbn = :isbn
+        JOIN FETCH p.book b
+        JOIN FETCH p.store s
+        WHERE (:isbn IS NULL OR b.isbn = :isbn)
+          AND (:storeName IS NULL OR s.name = :storeName)
+          AND (:status IS NULL OR a.status = :status)
         ORDER BY a.scrapedAt DESC
     """)
-    List<AvailabilitySnapshot> findByBookIsbn(@Param("isbn") String isbn, Pageable pageable);
+    List<AvailabilitySnapshot> findHistory(
+            @Param("isbn") String isbn,
+            @Param("storeName") String storeName,
+            @Param("status") String status,
+            Pageable pageable
+    );
 
     // Used by TrackingService.toDto() to get last-scraped timestamp
     Optional<AvailabilitySnapshot> findTopByPairIdOrderByScrapedAtDesc(Long pairId);
 
-    // Used during book deletion to remove snapshots before their pairs
+    // Used during book/store deletion, and now also by "delete all history for
+    // this pair" on the History page
     void deleteAllByPairId(Long pairId);
 }

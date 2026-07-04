@@ -6,6 +6,27 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "store:default"
+    "store:default",
+    "notification:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "docker-info",
+          "cmd": "docker",
+          "args": ["info"]
+        },
+        {
+          "name": "docker-compose-up",
+          "cmd": "docker",
+          "args": ["compose", "-f", { "validator": "\\S " }, "up", "-d"]
+        },
+        {
+          "name": "docker-compose-down",
+          "cmd": "docker",
+          "args": ["compose", "-f", { "validator": "\\S " }, "down"]
+        }
+      ]
+    }
   ]
 }

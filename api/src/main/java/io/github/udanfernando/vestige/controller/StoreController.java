@@ -25,4 +25,15 @@ public class StoreController {
     public ResponseEntity<StoreDto> create(@Valid @RequestBody StoreCreateDto dto) {
         return ResponseEntity.status(201).body(storeService.create(dto));
     }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<StoreDto> update(@PathVariable Long id, @RequestBody StoreUpdateDto dto) {
+        return ResponseEntity.ok(storeService.update(id, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        storeService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -2,6 +2,7 @@ package io.github.udanfernando.vestige.controller;
 
 import io.github.udanfernando.vestige.dto.DiscoverResultDto;
 import io.github.udanfernando.vestige.dto.RunSummaryDto;
+import io.github.udanfernando.vestige.dto.RunDetailDto;
 import io.github.udanfernando.vestige.exception.PipelineExecutionException;
 import io.github.udanfernando.vestige.exception.SelectorDiscoveryException;
 import io.github.udanfernando.vestige.service.RunService;
@@ -23,6 +24,11 @@ public class RunController {
     @GetMapping
     public ResponseEntity<List<RunSummaryDto>> getRecentRuns() throws IOException {
         return ResponseEntity.ok(runService.getRecentRuns());
+    }
+
+    @GetMapping("/{runId}")
+    public ResponseEntity<RunDetailDto> getRunDetail(@PathVariable String runId) throws IOException {
+        return ResponseEntity.ok(runService.getRunDetail(runId));
     }
 
     @PostMapping("/trigger")

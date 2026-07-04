@@ -3,6 +3,8 @@ package io.github.udanfernando.vestige.controller;
 import tools.jackson.databind.ObjectMapper;
 import io.github.udanfernando.vestige.dto.StoreCreateDto;
 import io.github.udanfernando.vestige.dto.StoreDto;
+import io.github.udanfernando.vestige.dto.StoreUpdateDto;
+import io.github.udanfernando.vestige.exception.ResourceNotFoundException;
 import io.github.udanfernando.vestige.service.StoreService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +17,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -76,5 +79,39 @@ class StoreControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void update_returnsUpdatedStore() throws Exception {
+        StoreUpdateDto dto = StoreUpdateDto.builder().searchUrlTemplate("https://sarasavi.lk/?s=test").build();
+        StoreDto updated = StoreDto.builder()
+                .id(1L).name("sarasavi").baseUrl("https://sarasavi.lk")
+                .searchUrlTemplate("https://sarasavi.lk/?s=test").build();
+
+        when(storeService.update(eq(1L), any())).thenReturn(updated);
+
+        mockMvc.perform(patch("/api/stores/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.searchUrlTemplate").value("https://sarasavi.lk/?s=test"));
+    }
+
+    @Test
+    void update_unknownId_returns404() throws Exception {
+        when(storeService.update(eq(99L), any()))
+                .thenThrow(new ResourceNotFoundException("Store not found: 99"));
+
+        mockMvc.perform(patch("/api/stores/99")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(StoreUpdateDto.builder().name("x").build())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void delete_returns204() throws Exception {
+        mockMvc.perform(delete("/api/stores/1"))
+                .andExpect(status().isNoContent());
+        verify(storeService).delete(1L);
     }
 }

@@ -3,6 +3,9 @@ package io.github.udanfernando.vestige.service;
 import tools.jackson.databind.ObjectMapper;
 import io.github.udanfernando.vestige.dto.DiscoverResultDto;
 import io.github.udanfernando.vestige.dto.RunSummaryDto;
+import io.github.udanfernando.vestige.dto.RunChangeDto;
+import io.github.udanfernando.vestige.dto.RunDetailDto;
+import io.github.udanfernando.vestige.exception.ResourceNotFoundException;
 import io.github.udanfernando.vestige.exception.PipelineExecutionException;
 import io.github.udanfernando.vestige.exception.SelectorDiscoveryException;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +20,7 @@ import java.nio.file.*;
 import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
 
 @Service
 public class RunService {
@@ -37,6 +41,7 @@ public class RunService {
         // run gets reported as a failure.
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
+                .version(HttpClient.Version.HTTP_1_1)
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMinutes(3));
@@ -79,6 +84,57 @@ public class RunService {
             }
         }
         return summaries;
+    }
+
+    public RunDetailDto getRunDetail(String runId) throws IOException {
+        Path logPath = Paths.get(logDir);
+        if (!Files.exists(logPath)) {
+            throw new ResourceNotFoundException("Run not found: " + runId);
+        }
+
+        List<Path> logFiles;
+        try (var stream = Files.walk(logPath)) {
+            logFiles = stream.filter(p -> p.toString().endsWith(".json")).collect(Collectors.toList());
+        }
+
+        for (Path file : logFiles) {
+            try {
+                Map<?, ?> raw = objectMapper.readValue(file.toFile(), Map.class);
+                if (runId.equals(str(raw.get("run_id")))) {
+                    return toRunDetailDto(raw);
+                }
+            } catch (Exception ignored) {
+                // Skip malformed log files, same tolerance as getRecentRuns()
+            }
+        }
+        throw new ResourceNotFoundException("Run not found: " + runId);
+    }
+
+    private RunDetailDto toRunDetailDto(Map<?, ?> raw) {
+        List<RunChangeDto> changes = new ArrayList<>();
+        if (raw.get("changes") instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> c) {
+                    changes.add(RunChangeDto.builder()
+                            .pairId(toLong(c.get("pair_id")))
+                            .bookName(str(c.get("book_name")))
+                            .storeName(str(c.get("store_name")))
+                            .fromStatus(str(c.get("from_status")))
+                            .toStatus(str(c.get("to_status")))
+                            .fromPrice(toBigDecimal(c.get("from_price")))
+                            .toPrice(toBigDecimal(c.get("to_price")))
+                            .productUrl(str(c.get("product_url")))
+                            .build());
+                }
+            }
+        }
+        return RunDetailDto.builder()
+                .runId(str(raw.get("run_id")))
+                .totalPairs(toInt(raw.get("total_pairs")))
+                .errors(listSize(raw.get("errors")))
+                .durationSeconds(toDouble(raw.get("duration_seconds")))
+                .changes(changes)
+                .build();
     }
 
     public RunSummaryDto trigger() {
@@ -131,4 +187,6 @@ public class RunService {
     private int toInt(Object o) { return o instanceof Number n ? n.intValue() : 0; }
     private double toDouble(Object o) { return o instanceof Number n ? n.doubleValue() : 0.0; }
     private int listSize(Object o) { return o instanceof List<?> list ? list.size() : 0; }
+    private Long toLong(Object o) { return o instanceof Number n ? n.longValue() : null; }
+    private BigDecimal toBigDecimal(Object o) { return o instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : null; }
 }

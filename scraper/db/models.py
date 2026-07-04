@@ -5,6 +5,7 @@ from typing import List, Optional
 from sqlalchemy import (
     BigInteger,
     String,
+    Boolean,
     ForeignKey,
     Numeric,
     DateTime,
@@ -23,6 +24,8 @@ class Series(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
+    author: Mapped[Optional[str]]
+    description: Mapped[Optional[str]]
 
     books: Mapped[List["Book"]] = relationship(back_populates="series")
 
@@ -34,6 +37,8 @@ class Book(Base):
     name: Mapped[str]
     isbn: Mapped[str] = mapped_column(String, unique=True)
     is_series_entry: Mapped[bool] = mapped_column(default=False)
+    author: Mapped[Optional[str]]
+    description: Mapped[Optional[str]]
 
     # Optional foreign key
     series_id: Mapped[Optional[int]] = mapped_column(
@@ -88,6 +93,14 @@ class AvailabilitySnapshot(Base):
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     tracking_pair: Mapped["TrackingPair"] = relationship(back_populates="snapshots")
+
+
+class SettingOverride(Base):
+    __tablename__ = "setting_overrides"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    is_encrypted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 Index(

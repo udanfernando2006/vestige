@@ -8,22 +8,29 @@ export default function RunLog({ runs }: { runs: RunSummaryDto[] }) {
     const [latest, ...previous] = runs;
 
     return (
-        <div className="card run-log">
-            <button className="run-log-toggle" onClick={() => setOpen(!open)}>
-                {open ? "▼" : "▶"} Last run — {latest.totalPairs} pairs,{" "}
-                {latest.changes} changes, {latest.errors} errors (
-                {latest.durationSeconds.toFixed(1)}s)
+        <div className="vestige-window">
+            <button
+                type="button"
+                className="vestige-titlebar run-log-toggle"
+                onClick={() => setOpen(!open)}>
+                <span>
+                    {open ? "▾" : "▸"} Last run — {latest.totalPairs} pairs,{" "}
+                    {latest.changes} changes, {latest.errors} errors (
+                    {latest.durationSeconds.toFixed(1)}s)
+                </span>
             </button>
             {open && previous.length > 0 && (
-                <ul className="run-log-history">
-                    {previous.slice(0, 9).map((r) => (
-                        <li key={r.runId}>
-                            {new Date(r.runId).toLocaleString()} —{" "}
-                            {r.totalPairs} pairs, {r.changes} changes,{" "}
-                            {r.errors} errors
-                        </li>
-                    ))}
-                </ul>
+                <div className="vestige-window-body">
+                    <ul className="run-log-history">
+                        {previous.slice(0, 9).map((r) => (
+                            <li key={r.runId}>
+                                {new Date(r.runId).toLocaleString()} —{" "}
+                                {r.totalPairs} pairs, {r.changes} changes,{" "}
+                                {r.errors} errors
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             )}
         </div>
     );

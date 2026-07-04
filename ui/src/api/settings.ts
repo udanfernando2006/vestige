@@ -20,3 +20,84 @@ export async function setApiBaseUrl(url: string): Promise<void> {
     await store.save();
     cachedBaseUrl = trimmed; // applied immediately — no restart needed
 }
+
+// Whether notifications.ts's poller should actually fire an OS notification
+// when it finds a run with changes. Local, device-level — unlike the LLM/
+// scheduler fields on the same page, this never touches Spring Boot or
+// scraper-server, since detection happens server-side either way and firing
+// is the one part of this feature that lives entirely in this layer
+// (vestige_guide_v3.md Section 11). Defaults to true so existing installs
+// behave exactly as before this toggle existed.
+let cachedNotificationsEnabled: boolean | null = null;
+
+export async function getNotificationsEnabled(): Promise<boolean> {
+    if (cachedNotificationsEnabled !== null) return cachedNotificationsEnabled;
+    const stored = await store.get<boolean>("notificationsEnabled");
+    cachedNotificationsEnabled = stored ?? true;
+    return cachedNotificationsEnabled;
+}
+
+export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
+    await store.set("notificationsEnabled", enabled);
+    await store.save();
+    cachedNotificationsEnabled = enabled; // applied immediately, same as setApiBaseUrl
+}
+
+// Whether the app should automatically start the local Docker stack on launch
+// and stop it (docker compose down only — never the Docker engine itself,
+// confirmed) on quit. Only ever consulted when the configured API base URL
+// resolves to localhost/127.0.0.1 — see App.tsx's gating logic. Defaults to
+// true so a fresh local install "just works" without a manual toggle visit.
+let cachedAutoDockerEnabled: boolean | null = null;
+
+export async function getAutoDockerEnabled(): Promise<boolean> {
+    if (cachedAutoDockerEnabled !== null) return cachedAutoDockerEnabled;
+    const stored = await store.get<boolean>("autoDockerEnabled");
+    cachedAutoDockerEnabled = stored ?? true;
+    return cachedAutoDockerEnabled;
+}
+
+export async function setAutoDockerEnabled(enabled: boolean): Promise<void> {
+    await store.set("autoDockerEnabled", enabled);
+    await store.save();
+    cachedAutoDockerEnabled = enabled;
+}
+
+// Tracks WHICH deployment context the auto-start prompt was last answered
+// under, not just whether it's ever been shown. "local" means it's been
+// answered for the current local session; null means it hasn't (either a
+// true first run, or the user has since switched away from localhost and
+// back — see App.tsx, which resets this to null whenever the configured
+// URL is non-local). This lets the prompt re-surface on a cloud→local
+// transition instead of being permanently silenced after the very first
+// answer, while still staying silent across repeated local launches that
+// never left the local context in between.
+let cachedAutoDockerPromptContext: string | null | undefined = undefined;
+
+export async function getAutoDockerPromptContext(): Promise<string | null> {
+    if (cachedAutoDockerPromptContext !== undefined) {
+        return cachedAutoDockerPromptContext;
+    }
+    const stored = await store.get<string | null>("autoDockerPromptContext");
+    cachedAutoDockerPromptContext = stored ?? null;
+    return cachedAutoDockerPromptContext;
+}
+
+export async function setAutoDockerPromptContext(
+    context: string | null,
+): Promise<void> {
+    await store.set("autoDockerPromptContext", context);
+    await store.save();
+    cachedAutoDockerPromptContext = context;
+}
+
+/** Returns true only if the configured API base URL points at this machine. */
+export async function isLocalDeployment(): Promise<boolean> {
+    const url = await getApiBaseUrl();
+    try {
+        const hostname = new URL(url).hostname;
+        return hostname === "localhost" || hostname === "127.0.0.1";
+    } catch {
+        return false;
+    }
+}

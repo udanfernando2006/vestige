@@ -12,4 +12,6 @@ public class BookDto {
     private boolean seriesEntry;
     private Long seriesId;
     private String seriesName;
+    private String author;
+    private String description;
 }

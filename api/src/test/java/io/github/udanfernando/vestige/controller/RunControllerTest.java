@@ -2,8 +2,11 @@ package io.github.udanfernando.vestige.controller;
 
 import io.github.udanfernando.vestige.dto.DiscoverResultDto;
 import io.github.udanfernando.vestige.dto.RunSummaryDto;
+import io.github.udanfernando.vestige.dto.RunChangeDto;
+import io.github.udanfernando.vestige.dto.RunDetailDto;
 import io.github.udanfernando.vestige.exception.PipelineExecutionException;
 import io.github.udanfernando.vestige.exception.SelectorDiscoveryException;
+import io.github.udanfernando.vestige.exception.ResourceNotFoundException;
 import io.github.udanfernando.vestige.service.RunService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +41,40 @@ class RunControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].runId").value("2026-05-16T08:00:00Z"))
                 .andExpect(jsonPath("$[0].totalPairs").value(12));
+    }
+
+    @Test
+    void getRunDetail_returnsChanges() throws Exception {
+        RunChangeDto change = RunChangeDto.builder()
+                .pairId(2L).bookName("Sword of Destiny").storeName("vijitha_yapa")
+                .fromStatus("IN_STOCK").toStatus("OUT_OF_STOCK")
+                .fromPrice(new java.math.BigDecimal("1500.00"))
+                .toPrice(null)
+                .productUrl("https://vijithayapa.com/books/sword-of-destiny")
+                .build();
+
+        RunDetailDto detail = RunDetailDto.builder()
+                .runId("2026-05-16T08:00:00Z").totalPairs(12).errors(0).durationSeconds(47.2)
+                .changes(List.of(change))
+                .build();
+
+        when(runService.getRunDetail("2026-05-16T08:00:00Z")).thenReturn(detail);
+
+        mockMvc.perform(get("/api/runs/2026-05-16T08:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changes[0].bookName").value("Sword of Destiny"))
+                .andExpect(jsonPath("$.changes[0].fromStatus").value("IN_STOCK"))
+                .andExpect(jsonPath("$.changes[0].toStatus").value("OUT_OF_STOCK"))
+                .andExpect(jsonPath("$.changes[0].toPrice").doesNotExist()); // NON_NULL omits it, doesn't send null
+    }
+
+    @Test
+    void getRunDetail_unknownRunId_returns404() throws Exception {
+        when(runService.getRunDetail("does-not-exist"))
+                .thenThrow(new ResourceNotFoundException("Run not found: does-not-exist"));
+
+        mockMvc.perform(get("/api/runs/does-not-exist"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

@@ -39,6 +39,7 @@ jobs:
             DIRECT_API_KEY: test-key-not-used
             DIRECT_MODEL: test-model-not-used
             LOG_DIR: /tmp/vestige-test-logs
+            SETTINGS_ENCRYPTION_KEY: QczWxa4SA3-2zf37DYS1nyYtqPdjEjJ_LY9KDyS32cc=
 
         defaults:
             run:
@@ -113,3 +114,28 @@ jobs:
 
             - name: Run tests
               run: ./mvnw test
+
+    ui:
+        name: UI tests
+        runs-on: ubuntu-latest
+
+        defaults:
+            run:
+                working-directory: ui
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22.21.0"
+                  cache: npm
+                  cache-dependency-path: ui/package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run tests
+              run: npm test

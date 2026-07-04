@@ -24,6 +24,12 @@ public class Book {
     @Column(nullable = false, unique = true)
     private String isbn;
 
+    @Column(columnDefinition = "TEXT")
+    private String author;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
     @Column(name = "is_series_entry", nullable = false)
     @Builder.Default
     private boolean seriesEntry = false;

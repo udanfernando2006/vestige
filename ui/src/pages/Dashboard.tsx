@@ -68,6 +68,10 @@ export default function Dashboard() {
             <RunLog runs={runs} />
             {loading ? (
                 <p>Loading…</p>
+            ) : byBook.size === 0 ? (
+                <p className="muted">
+                    No tracked books yet — add one on the Books page.
+                </p>
             ) : (
                 <div className="book-grid">
                     {[...byBook.entries()].map(([bookName, stores]) => (
@@ -77,11 +81,6 @@ export default function Dashboard() {
                             stores={stores}
                         />
                     ))}
-                    {byBook.size === 0 && (
-                        <p className="muted">
-                            No tracked books yet — add one on the Books page.
-                        </p>
-                    )}
                 </div>
             )}
         </div>

@@ -16,4 +16,6 @@ public class BookCreateDto {
     private boolean seriesEntry;
 
     private String seriesName;
+    private String author;
+    private String description;
 }

@@ -7,4 +7,5 @@ public class StoreDto {
     private Long id;
     private String name;
     private String baseUrl;
+    private String searchUrlTemplate; // null = undiscovered; the Crawler caches one here on first successful search
 }

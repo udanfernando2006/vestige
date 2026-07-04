@@ -2,16 +2,26 @@ import { getApiBaseUrl } from "./settings";
 import type {
     BookGroupDto,
     BookCreateDto,
+    BookUpdateDto,
     BookDto,
+    SeriesDto,
+    SeriesCreateDto,
+    SeriesUpdateDto,
+    BulkSeriesAssignDto,
     StoreDto,
     StoreCreateDto,
+    StoreUpdateDto,
     TrackingPairDto,
     TrackingPairCreateDto,
     TrackingPairUpdateDto,
     AvailabilityDto,
     SnapshotHistoryDto,
+    HistoryQuery,
     RunSummaryDto,
+    RunDetailDto,
     DiscoverResultDto,
+    SettingsDto,
+    SettingsUpdateDto,
 } from "./types";
 
 export class ApiError extends Error {
@@ -72,6 +82,47 @@ export function deleteBook(id: number): Promise<void> {
     return request(`/api/books/${id}`, { method: "DELETE" });
 }
 
+export function updateBook(id: number, dto: BookUpdateDto): Promise<BookDto> {
+    return request(`/api/books/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function bulkAssignSeries(dto: BulkSeriesAssignDto): Promise<BookDto[]> {
+    return request("/api/books/series", {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+// ---- Series ----
+
+export function getSeries(): Promise<SeriesDto[]> {
+    return request("/api/series");
+}
+
+export function createSeries(dto: SeriesCreateDto): Promise<SeriesDto> {
+    return request("/api/series", {
+        method: "POST",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function updateSeries(
+    id: number,
+    dto: SeriesUpdateDto,
+): Promise<SeriesDto> {
+    return request(`/api/series/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function deleteSeries(id: number): Promise<void> {
+    return request(`/api/series/${id}`, { method: "DELETE" });
+}
+
 // ---- Stores ----
 
 export function getStores(): Promise<StoreDto[]> {
@@ -83,6 +134,20 @@ export function createStore(dto: StoreCreateDto): Promise<StoreDto> {
         method: "POST",
         body: JSON.stringify(dto),
     });
+}
+
+export function updateStore(
+    id: number,
+    dto: StoreUpdateDto,
+): Promise<StoreDto> {
+    return request(`/api/stores/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(dto),
+    });
+}
+
+export function deleteStore(id: number): Promise<void> {
+    return request(`/api/stores/${id}`, { method: "DELETE" });
 }
 
 // ---- Tracking ----
@@ -121,10 +186,22 @@ export function getAvailability(): Promise<AvailabilityDto[]> {
 }
 
 export function getHistory(
-    isbn: string,
-    limit = 50,
+    query: HistoryQuery = {},
 ): Promise<SnapshotHistoryDto[]> {
-    return request(`/api/availability/history/${isbn}?limit=${limit}`);
+    const params = new URLSearchParams();
+    if (query.isbn) params.set("isbn", query.isbn);
+    if (query.storeName) params.set("storeName", query.storeName);
+    if (query.status) params.set("status", query.status);
+    params.set("limit", String(query.limit ?? 100));
+    return request(`/api/availability/history?${params.toString()}`);
+}
+
+export function deleteSnapshot(id: number): Promise<void> {
+    return request(`/api/availability/${id}`, { method: "DELETE" });
+}
+
+export function deleteHistoryForPair(pairId: number): Promise<void> {
+    return request(`/api/availability/pair/${pairId}`, { method: "DELETE" });
 }
 
 // ---- Runs ----
@@ -133,10 +210,26 @@ export function getRuns(): Promise<RunSummaryDto[]> {
     return request("/api/runs");
 }
 
+export function getRunDetail(runId: string): Promise<RunDetailDto> {
+    return request(`/api/runs/${encodeURIComponent(runId)}`);
+}
+
 export function triggerRun(): Promise<RunSummaryDto> {
     return request("/api/runs/trigger", { method: "POST" });
 }
 
 export function discoverSelectors(pairId: number): Promise<DiscoverResultDto> {
     return request(`/api/runs/discover/${pairId}`, { method: "POST" });
+}
+
+// ---- Settings ----
+export function getSettings(): Promise<SettingsDto> {
+    return request("/api/settings");
+}
+
+export function updateSettings(dto: SettingsUpdateDto): Promise<void> {
+    return request("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(dto),
+    });
 }

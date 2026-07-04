@@ -62,6 +62,8 @@ public class BookService {
                 .isbn(dto.getIsbn())
                 .seriesEntry(dto.isSeriesEntry())
                 .series(series)
+                .author(dto.getAuthor())
+                .description(dto.getDescription())
                 .build();
 
         return toDto(bookRepo.save(book));
@@ -81,6 +83,51 @@ public class BookService {
         bookRepo.delete(book);
     }
 
+    // PATCH /api/books/{id} — author/description only, "" = clear, null = no change
+    @Transactional
+    public BookDto update(Long id, BookUpdateDto dto) {
+        Book book = bookRepo.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Book not found: " + id));
+
+        if (dto.getAuthor() != null) {
+            book.setAuthor(dto.getAuthor().isEmpty() ? null : dto.getAuthor());
+        }
+        if (dto.getDescription() != null) {
+            book.setDescription(dto.getDescription().isEmpty() ? null : dto.getDescription());
+        }
+        return toDto(bookRepo.save(book));
+    }
+
+    // PATCH /api/books/series — bulk reassignment; always replaces current series
+    @Transactional
+    public List<BookDto> bulkAssignSeries(BulkSeriesAssignDto dto) {
+        boolean hasExisting = dto.getSeriesId() != null;
+        boolean hasNew = dto.getNewSeriesName() != null && !dto.getNewSeriesName().isBlank();
+
+        if (hasExisting == hasNew) {
+            throw new IllegalArgumentException(
+                    "Provide exactly one of seriesId or newSeriesName");
+        }
+
+        Series target = hasExisting
+                ? seriesRepo.findById(dto.getSeriesId())
+                .orElseThrow(() -> new ResourceNotFoundException("Series not found: " + dto.getSeriesId()))
+                : seriesRepo.findByName(dto.getNewSeriesName())
+                .orElseGet(() -> seriesRepo.save(Series.builder().name(dto.getNewSeriesName()).build()));
+
+        List<Book> books = bookRepo.findAllById(dto.getBookIds());
+        if (books.size() != dto.getBookIds().size()) {
+            throw new ResourceNotFoundException("One or more books not found");
+        }
+
+        for (Book b : books) {
+            b.setSeries(target); // replaces whatever was there before, including null
+        }
+        bookRepo.saveAll(books);
+
+        return books.stream().map(this::toDto).toList();
+    }
+
     private BookDto toDto(Book b) {
         return BookDto.builder()
                 .id(b.getId())
@@ -89,6 +136,8 @@ public class BookService {
                 .seriesEntry(b.isSeriesEntry())
                 .seriesId(b.getSeries() != null ? b.getSeries().getId() : null)
                 .seriesName(b.getSeries() != null ? b.getSeries().getName() : null)
+                .author(b.getAuthor())
+                .description(b.getDescription())
                 .build();
     }
 }

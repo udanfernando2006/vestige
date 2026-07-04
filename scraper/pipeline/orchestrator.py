@@ -34,10 +34,11 @@ class Orchestrator:
         all_results = []
         changes = []
         errors = []
+        settings = self.db_writer.get_settings()
 
         for pair in pairs:
-            path = self.determine_path(pair)
-            result = await self.run_pair(pair, path)
+            path = self.determine_path(pair, settings)
+            result = await self.run_pair(pair, path, settings)
 
             pair_summary = {
                 "pair_id": pair["id"],
@@ -59,17 +60,18 @@ class Orchestrator:
                 pair_summary["status"] = availability.status
 
                 # Detect changes
-                prev_status = last["status"] if last else None
-                if last is None or last["in_stock"] != availability.in_stock:
+                change = self._detect_change(last, availability)
+                if change is not None:
                     pair_summary["changed"] = True
                     changes.append(
                         {
                             "pair_id": pair["id"],
-                            "from": prev_status,
-                            "to": availability.status,
+                            "book_name": pair["book_name"],
+                            "store_name": pair["store_name"],
+                            "product_url": pair.get("product_url"),
+                            **change,
                         }
                     )
-
             elif result.get("status") == "NEEDS_SETUP":
                 pass  # DBWriter already updated status; just record it
 
@@ -98,15 +100,15 @@ class Orchestrator:
         )
         return summary
 
-    def is_llm_discovery_enabled(self) -> bool:
-        """Reads LLM_DISCOVERY_ENABLED from env; returns bool."""
-        return os.environ.get("LLM_DISCOVERY_ENABLED", "false").lower() == "true"
+    def is_llm_discovery_enabled(self, settings: dict) -> bool:
+        """Reads LLM_DISCOVERY_ENABLED from settings; returns bool."""
+        return settings["LLM_DISCOVERY_ENABLED"].strip().lower() == "true"
 
-    def get_llm_mode(self) -> str:
-        """Reads LLM_MODE from env; returns 'direct' or 'selector'."""
-        return os.environ.get("LLM_MODE", "selector").lower()
+    def get_llm_mode(self, settings: dict) -> str:
+        """Reads LLM_MODE from settings; returns 'direct' or 'selector'."""
+        return settings["LLM_MODE"].strip().lower()
 
-    def determine_path(self, pair: TrackingPair) -> str:
+    def determine_path(self, pair: TrackingPair, settings: dict) -> str:
         """
         Inspects tracking pair state to return execution path A, B, C, or D.
         """
@@ -117,9 +119,9 @@ class Orchestrator:
             return "A"
         elif has_url and has_selectors:
             return "C"
-        elif self.get_llm_mode() == "direct":
+        elif self.get_llm_mode(settings) == "direct":
             return "D"
-        elif self.is_llm_discovery_enabled():
+        elif self.is_llm_discovery_enabled(settings):
             return "B"
         else:
             return "NEEDS_SETUP"
@@ -150,7 +152,7 @@ class Orchestrator:
     def collect_run_summary(self, results: List[Dict[str, Any]]) -> dict:
         """Aggregates all results, including a list of skipped pairs due to NEEDS_SETUP."""
         summary = {
-            "total": len(results),
+            "total_pairs": len(results),
             "completed": 0,
             "errors": 0,
             "needs_setup": [],
@@ -169,8 +171,46 @@ class Orchestrator:
 
         return summary
 
+    def _detect_change(
+        self, last: dict | None, availability: AvailabilityResult
+    ) -> dict | None:
+        """
+        Compares `availability` against `last` (the previous snapshot dict
+        from DBWriter.get_last_snapshot(), or None on a pair's first-ever
+        snapshot). Returns a change record if status or price differs, else
+        None.
+
+        A first-ever snapshot is never reported as a change — there's nothing
+        to diff against, and reporting it as one would notify on every newly
+        added book the moment it's first scraped.
+        """
+        if last is None:
+            return None
+
+        status_changed = last["in_stock"] != availability.in_stock
+        price_changed = (
+            last["price"] is not None
+            and availability.price is not None
+            and round(float(last["price"]), 2) != round(float(availability.price), 2)
+        )
+        if not status_changed and not price_changed:
+            return None
+
+        return {
+            "from_status": last["status"],
+            "to_status": availability.status,
+            "from_price": (
+                round(float(last["price"]), 2) if last["price"] is not None else None
+            ),
+            "to_price": (
+                round(float(availability.price), 2)
+                if availability.price is not None
+                else None
+            ),
+        }
+
     async def _run_pair_path_a(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """
         Path A: Discovery.
@@ -211,18 +251,18 @@ class Orchestrator:
         pair["product_url"] = found_url
 
         # Determine next routing based on LLM_MODE
-        next_path = "D" if self.get_llm_mode() == "direct" else "B"
+        next_path = "D" if self.get_llm_mode(settings) == "direct" else "B"
         print(f"Path A completed. Routing to Path {next_path}")
 
         if next_path == "B":
-            return await self._run_pair_path_b(pair, session)
-        return await self._run_pair_path_d(pair, session)
+            return await self._run_pair_path_b(pair, session, settings)
+        return await self._run_pair_path_d(pair, session, settings)
 
     async def _run_pair_path_b(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """Path B: LLM Discovery of Selectors + Fast Scrape."""
-        if not self.is_llm_discovery_enabled():
+        if not self.is_llm_discovery_enabled(settings):
             print(
                 f"Path B skipped for Pair {pair['id']}: LLM discovery disabled. Marking NEEDS_SETUP."
             )
@@ -249,7 +289,7 @@ class Orchestrator:
                 f"Path B: Discovery/validation failed for Pair {pair['id']} — falling back to direct extraction this run."
             )
             try:
-                return await self._run_pair_path_d(pair, session)
+                return await self._run_pair_path_d(pair, session, settings)
             except Exception as e:
                 print(
                     f"Path B: Direct-extraction fallback also failed for Pair {pair['id']}: {e}"
@@ -297,18 +337,17 @@ class Orchestrator:
         return {"pair_id": pair["id"], "status": "COMPLETED", "result": scrape_data}
 
     async def _run_pair_path_d(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """Path D: LLM Direct Extraction bypassing CSS Selectors."""
         await session.navigate(pair["product_url"])
         html = await session.get_html()
-
         extractor = Extractor(
             {
                 "engine": "stripped",
-                "api_base": os.environ.get("DIRECT_API_BASE"),
-                "api_key": os.environ.get("DIRECT_API_KEY", ""),
-                "model_name": os.environ.get("DIRECT_MODEL"),
+                "api_base": settings["DIRECT_API_BASE"],
+                "api_key": settings["DIRECT_API_KEY"],
+                "model_name": settings["DIRECT_MODEL"],
             }
         )
         cleaned_html = extractor.clean_html(html)
@@ -343,7 +382,7 @@ class Orchestrator:
             "result": availability_result,
         }
 
-    async def run_pair(self, pair: TrackingPair, path: str) -> dict:
+    async def run_pair(self, pair: TrackingPair, path: str, settings: dict) -> dict:
         """
         Master execution router. Opens one BrowserSession per pair and passes it through the module chain.
         """
@@ -356,13 +395,13 @@ class Orchestrator:
         async with BrowserSession() as session:
             try:
                 if path == "A":
-                    return await self._run_pair_path_a(pair, session)
+                    return await self._run_pair_path_a(pair, session, settings)
                 elif path == "B":
-                    return await self._run_pair_path_b(pair, session)
+                    return await self._run_pair_path_b(pair, session, settings)
                 elif path == "C":
                     return await self._run_pair_path_c(pair, session)
                 elif path == "D":
-                    return await self._run_pair_path_d(pair, session)
+                    return await self._run_pair_path_d(pair, session, settings)
                 else:
                     raise Exception(f"Unknown path routing: {path}")
 

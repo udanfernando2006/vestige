@@ -64,10 +64,14 @@ def _mock_subprocess_failure() -> MagicMock:
 
 class TestPathB:
     async def test_path_b_successful_discovery_transitions_to_pending(
-        self, db_writer, db_session, seeded_pair_b, monkeypatch, mock_browser_session
+        self, db_writer, db_session, seeded_pair_b, mock_browser_session
     ):
-        monkeypatch.setenv("LLM_MODE", "selector")
-        monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
+        mock_settings = {
+            "LLM_MODE": "selector",
+            "LLM_DISCOVERY_ENABLED": "true",
+            "SELECTOR_API_BASE": "https://example.test/v1",
+            "SELECTOR_MODEL": "test-model",
+        }
 
         orchestrator = Orchestrator(db_writer=db_writer)
         mock_result = _mock_subprocess_success(seeded_pair_b["id"])
@@ -105,7 +109,9 @@ class TestPathB:
                     "pipeline.orchestrator.BrowserSession",
                     return_value=mock_browser_session,
                 ):
-                    await orchestrator.run_pair(seeded_pair_b, path="B")
+                    await orchestrator.run_pair(
+                        seeded_pair_b, path="B", settings=mock_settings
+                    )
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
         assert updated["status"] == "PENDING"
@@ -116,37 +122,48 @@ class TestPathB:
         db_session,
         seeded_pair_b,
         mock_browser_session,
-        llm_direct_response,
         monkeypatch,
     ):
         """discover_selectors.py --commit fails -> Orchestrator falls back to Path D
         this run. Selectors stay unset (Path B retries next run), but the pair gets
         a usable, correctly-labeled snapshot instead of being left with nothing."""
-        monkeypatch.setenv("LLM_MODE", "selector")
-        monkeypatch.setenv("LLM_DISCOVERY_ENABLED", "true")
-        monkeypatch.setenv("DIRECT_API_BASE", "https://example.test/v1")
-        monkeypatch.setenv("DIRECT_MODEL", "test-model")
+
+        mock_settings = {
+            "LLM_MODE": "selector",
+            "LLM_DISCOVERY_ENABLED": "true",
+            "DIRECT_API_BASE": "https://example.test/v1",
+            "DIRECT_MODEL": "test-model",
+            "DIRECT_API_KEY": "test-key",
+        }
+
+        mock_llm_response = {
+            "price": "Rs. 3,580",
+            "stock_status": "In Stock",
+            "description": None,
+            "isbn": None,
+        }
 
         orchestrator = Orchestrator(db_writer=db_writer)
 
-        with patch("subprocess.run", return_value=_mock_subprocess_failure()):
-            with patch(
-                "pipeline.llm_extractor.Extractor._call_llm",
-                return_value=llm_direct_response,
-            ):
+        with patch.object(db_writer, "get_settings", return_value=mock_settings):
+            with patch("subprocess.run", return_value=_mock_subprocess_failure()):
                 with patch(
-                    "pipeline.orchestrator.BrowserSession",
-                    return_value=mock_browser_session,
+                    "pipeline.llm_extractor.Extractor._call_llm",
+                    return_value=mock_llm_response,
                 ):
-                    await orchestrator.run_all()
+                    with patch(
+                        "pipeline.orchestrator.BrowserSession",
+                        return_value=mock_browser_session,
+                    ):
+                        await orchestrator.run_all()
 
         updated = db_writer.get_pair(seeded_pair_b["id"])
-        assert updated["price_selector"] is None
-        assert updated["stock_selector"] is None
-        assert updated["status"] != "NEEDS_SETUP"
+        assert updated["status"] == "IN_STOCK"  # Path D sets status based on LLM result
 
         snapshot = db_writer.get_last_snapshot(seeded_pair_b["id"])
+        assert snapshot is not None
         assert snapshot["source"] == "llm_direct"
+        assert snapshot["status"] == "IN_STOCK"
 
     async def test_path_b_failed_discovery_and_failed_fallback_marks_needs_setup(
         self, db_writer, db_session, seeded_pair_b, mock_browser_session, monkeypatch
