@@ -119,6 +119,15 @@ export default function App() {
     }, []);
 
     useEffect(() => {
+        const unlisten = listen<string>("docker-log", (event) => {
+            appendLog(event.payload);
+        });
+        return () => {
+            unlisten.then((f) => f());
+        };
+    }, [appendLog]);
+
+    useEffect(() => {
         const unlisten = listen("quit-requested", async () => {
             const local = await isLocalDeployment();
             const autoEnabled = await getAutoDockerEnabled();
@@ -156,7 +165,6 @@ export default function App() {
                 // switch back to localhost re-triggers the prompt instead
                 // of silently reusing whatever was answered last time.
                 await setAutoDockerPromptContext(null);
-            
             }
             startDockerFlow();
         })();

@@ -13,6 +13,7 @@ use tokio::sync::oneshot;
 use std::sync::Mutex;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use rand::RngCore;
+use tauri_plugin_shell::process::CommandEvent;
 
 // Holds the pending "quit confirmed" signal between the tray menu event
 // (which fires the "quit-requested" event to JS) and the JS response
@@ -136,7 +137,8 @@ async fn start_docker_stack(app: tauri::AppHandle) -> Result<(), String> {
     let dir = vestige_dir(&app)?;
     let compose_path = dir.join("docker-compose.yml");
     let shell = app.shell();
-    let output = shell
+
+    let (mut rx, _child) = shell
         .command("docker")
         .args([
             "compose",
@@ -145,13 +147,32 @@ async fn start_docker_stack(app: tauri::AppHandle) -> Result<(), String> {
             "up",
             "-d",
         ])
-        .output()
-        .await
+        .spawn()
         .map_err(|e| e.to_string())?;
-    if output.status.success() {
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) | CommandEvent::Stderr(bytes) => {
+                let line = String::from_utf8_lossy(&bytes).trim_end().to_string();
+                if !line.is_empty() {
+                    let _ = app.emit("docker-log", line);
+                }
+            }
+            CommandEvent::Terminated(payload) => {
+                success = payload.code == Some(0);
+            }
+            CommandEvent::Error(err) => {
+                let _ = app.emit("docker-log", format!("Error: {err}"));
+            }
+            _ => {}
+        }
+    }
+
+    if success {
         Ok(())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        Err("docker compose up exited with a non-zero status".to_string())
     }
 }
 
