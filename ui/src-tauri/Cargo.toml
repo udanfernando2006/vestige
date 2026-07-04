@@ -1,8 +1,8 @@
 [package]
-name = "ui"
-version = "1.3.0"
-description = "A Tauri App"
-authors = ["you"]
+name = "vestige-ui"
+version = "1.4.0"
+description = "Desktop UI for Vestige, a config-driven book price and availability tracker for Sri Lankan online bookstores."
+authors = ["udanfernando2006"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
