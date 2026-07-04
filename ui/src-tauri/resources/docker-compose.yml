@@ -115,13 +115,6 @@ services:
             DIRECT_API_KEY: ${DIRECT_API_KEY:-}
             DIRECT_MODEL: ${DIRECT_MODEL:-}
 
-            # Email notifications — a UI-triggered run can change status just like a
-            # scheduled one, so this needs the same notification config.
-            SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
-            SMTP_USER: ${SMTP_USER:-}
-            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-            NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
-
             LOG_DIR: /app/logs
             PYTHONIOENCODING: utf-8
             BOOKS_CONFIG_PATH: /app/books_config.json
@@ -181,12 +174,6 @@ services:
             DIRECT_API_BASE: ${DIRECT_API_BASE:-}
             DIRECT_API_KEY: ${DIRECT_API_KEY:-}
             DIRECT_MODEL: ${DIRECT_MODEL:-}
-
-            # Email notifications
-            SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
-            SMTP_USER: ${SMTP_USER:-}
-            SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-            NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
 
             # Log directory inside the container — matches the volume mount below
             LOG_DIR: /app/logs

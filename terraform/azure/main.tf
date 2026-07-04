@@ -101,13 +101,13 @@ resource "azurerm_linux_virtual_machine" "vestige_vm" {
   resource_group_name = azurerm_resource_group.vestige_rg.name
   location            = azurerm_resource_group.vestige_rg.location
   size                = "Standard_D2s_v5"
-  admin_username      = "azureuser"
+  admin_username      = "ubuntu"
   network_interface_ids = [
     azurerm_network_interface.vestige_nic.id,
   ]
 
   admin_ssh_key {
-    username   = "azureuser"
+    username   = "ubuntu"
     public_key = file("${path.module}/vestige-azure-key.pub")
   }
 
@@ -138,9 +138,9 @@ resource "azurerm_linux_virtual_machine" "vestige_vm" {
     sudo apt-get install -y docker.io docker-compose-v2
     sudo systemctl enable --now docker
 
-    # 3. Create the workspace and grant permissions to the azureuser
-    mkdir -p /home/azureuser/vestige
-    chown -R azureuser:azureuser /home/azureuser/vestige
+    # 3. Create the workspace and grant permissions to the ubuntu user
+    mkdir -p /home/ubuntu/vestige
+    chown -R ubuntu:ubuntu /home/ubuntu/vestige
   EOF
   )
 }
