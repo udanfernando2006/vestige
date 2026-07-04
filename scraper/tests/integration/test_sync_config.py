@@ -29,11 +29,7 @@ SAMPLE_CONFIG = {
     "tracking": [
         {"isbn": "9780316452465", "store": "sarasavi", "product_url": None},
         {"isbn": "9780316452465", "store": "vijitha_yapa", "product_url": None},
-    ],
-    "notifications": {
-        "email": "test@example.com",
-        "desktop": False,
-    },
+    ]
 }
 
 
