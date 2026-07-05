@@ -19,6 +19,7 @@ async def test_find_and_fill_search_prefers_search_form_over_generic_form():
     search_input = AsyncMock()
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
+    search_input.is_visible = AsyncMock(return_value=True)
 
     search_form = AsyncMock()
     search_form.query_selector = AsyncMock(return_value=search_input)
@@ -31,6 +32,7 @@ async def test_find_and_fill_search_prefers_search_form_over_generic_form():
 
     page = MagicMock()
     page.url = "https://booxworm.lk/"
+    page.goto = AsyncMock(return_value=None)
 
     async def query_selector(selector):
         if selector == "form[role='search']":
@@ -61,6 +63,7 @@ async def test_find_and_fill_search_keeps_generic_form_fallback():
     search_input = AsyncMock()
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
+    search_input.is_visible = AsyncMock(return_value=True)
 
     generic_form = AsyncMock()
     generic_form.query_selector = AsyncMock(return_value=search_input)
@@ -89,3 +92,93 @@ async def test_find_and_fill_search_keeps_generic_form_fallback():
     assert result is True
     search_input.fill.assert_awaited_once_with("The Last Wish")
     search_input.press.assert_awaited_once_with("Enter")
+
+
+@pytest.mark.asyncio
+async def test_find_and_fill_search_opens_hidden_form_before_falling_back_to_url():
+    search_input = AsyncMock()
+    search_input.fill = AsyncMock(return_value=None)
+    search_input.press = AsyncMock(return_value=None)
+    search_input.is_visible = AsyncMock(side_effect=[False, False])
+
+    search_form = AsyncMock()
+    search_form.query_selector = AsyncMock(return_value=search_input)
+    search_form.get_attribute = AsyncMock(
+        side_effect=lambda name: {
+            "action": "/search",
+            "method": "get",
+        }.get(name)
+    )
+
+    search_trigger = AsyncMock()
+    search_trigger.click = AsyncMock(return_value=None)
+
+    page = MagicMock()
+    page.url = "https://booxworm.lk/"
+    page.goto = AsyncMock(return_value=None)
+
+    async def query_selector(selector):
+        if selector == "form[role='search']":
+            return search_form
+        if selector == "button[aria-label*='search' i]":
+            return search_trigger
+        return None
+
+    page.query_selector = AsyncMock(side_effect=query_selector)
+    page.wait_for_load_state = AsyncMock(return_value=None)
+
+    session = _make_session(page)
+
+    result = await session.find_and_fill_search("Chainsaw Man")
+
+    assert result is True
+    search_trigger.click.assert_awaited_once()
+    assert search_input.fill.await_count == 0
+    page.goto.assert_awaited_once_with(
+        "https://booxworm.lk/search?q=Chainsaw+Man",
+        timeout=60000,
+        wait_until="networkidle",
+    )
+
+
+@pytest.mark.asyncio
+async def test_find_and_fill_search_uses_visible_hidden_form_after_reveal():
+    search_input = AsyncMock()
+    search_input.fill = AsyncMock(return_value=None)
+    search_input.press = AsyncMock(return_value=None)
+    search_input.is_visible = AsyncMock(side_effect=[False, True])
+
+    search_form = AsyncMock()
+    search_form.query_selector = AsyncMock(return_value=search_input)
+    search_form.get_attribute = AsyncMock(
+        side_effect=lambda name: {
+            "action": "/search",
+            "method": "get",
+        }.get(name)
+    )
+
+    search_trigger = AsyncMock()
+    search_trigger.click = AsyncMock(return_value=None)
+
+    page = MagicMock()
+    page.url = "https://booxworm.lk/"
+
+    async def query_selector(selector):
+        if selector == "form[role='search']":
+            return search_form
+        if selector == "button[aria-label*='search' i]":
+            return search_trigger
+        return None
+
+    page.query_selector = AsyncMock(side_effect=query_selector)
+    page.wait_for_load_state = AsyncMock(return_value=None)
+
+    session = _make_session(page)
+
+    result = await session.find_and_fill_search("Chainsaw Man")
+
+    assert result is True
+    search_trigger.click.assert_awaited_once()
+    search_input.fill.assert_awaited_once_with("Chainsaw Man")
+    search_input.press.assert_awaited_once_with("Enter")
+    page.goto.assert_not_awaited()

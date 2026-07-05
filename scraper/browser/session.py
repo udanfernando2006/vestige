@@ -78,9 +78,31 @@ class BrowserSession:
         if not text_input:
             return False
 
-        await text_input.fill(query)
         try:
-            await text_input.press("Enter")
+            if await self._is_visible(text_input):
+                await self._fill_and_submit_search_input(text_input, query)
+            else:
+                await self._try_open_search_modal()
+
+                refreshed_form = await self._find_search_form()
+                if refreshed_form:
+                    refreshed_input = await self._find_search_input(refreshed_form)
+                    if refreshed_input and await self._is_visible(refreshed_input):
+                        await self._fill_and_submit_search_input(refreshed_input, query)
+                        try:
+                            await self._page.wait_for_load_state(
+                                "networkidle", timeout=self._timeout
+                            )
+
+                        except Exception as e:
+                            print(f"Error during search submission: {e}")
+
+                        return True
+
+                search_url = await self._build_search_url_from_form(form, query)
+                if not search_url:
+                    return False
+                await self.navigate(search_url)
         except Exception:
             search_url = await self._build_search_url_from_form(form, query)
             if not search_url:
@@ -123,6 +145,37 @@ class BrowserSession:
                 return text_input
 
         return None
+
+    async def _is_visible(self, element) -> bool:
+        try:
+            return await element.is_visible()
+        except Exception:
+            return False
+
+    async def _fill_and_submit_search_input(self, text_input, query: str) -> None:
+        await text_input.fill(query)
+        await text_input.press("Enter")
+
+    async def _try_open_search_modal(self) -> bool:
+        search_trigger_selectors = [
+            "button[aria-label*='search' i]",
+            "summary[aria-label*='search' i]",
+            ".header__icon--search",
+            ".search-modal__toggle",
+            "a[aria-label*='search' i]",
+        ]
+
+        for selector in search_trigger_selectors:
+            trigger = await self._page.query_selector(selector)
+            if not trigger:
+                continue
+            try:
+                await trigger.click()
+                return True
+            except Exception:
+                continue
+
+        return False
 
     async def _build_search_url_from_form(self, form, query: str) -> str | None:
         action = await form.get_attribute("action")
