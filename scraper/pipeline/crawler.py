@@ -1,3 +1,5 @@
+import sys
+
 from browser.session import BrowserSession
 from urllib.parse import quote_plus, urljoin
 from bs4 import BeautifulSoup
@@ -11,6 +13,11 @@ class Crawler:
     async def find_product_url(
         self, urls: dict, title: str, isbn: str = None, session=None
     ):
+        print(
+            f"[Crawler] find_product_url title={title!r} isbn={isbn!r} "
+            f"has_session={bool(session)} has_template={bool(urls.get('search_url_template'))}",
+            file=sys.stderr,
+        )
         if session and urls.get("search_url_template"):
             return await self._run_with_session(session, urls, title, isbn)
         else:
@@ -23,11 +30,20 @@ class Crawler:
         # e.g. "https://jumpbooks.lk/?s={query}" → replace {query} with isbn or title
         query = isbn if isbn else title
         search_url = self._build_search_url(urls["search_url_template"], query)
+        print(f"[Crawler] session search_url={search_url}", file=sys.stderr)
 
         await session.navigate(search_url)
         html = await session.get_html()
         candidates = self._extract_candidate_links(html)
+        print(
+            f"[Crawler] extracted {len(candidates)} candidate links from session search results",
+            file=sys.stderr,
+        )
         scored = self._score_candidates(candidates, isbn, title, urls["base_url"])
+        print(
+            f"[Crawler] scored {len(scored)} candidates; top={self._format_top_candidates(scored)}",
+            file=sys.stderr,
+        )
         if not scored:
             return {"success": False, "product_url": None, "status": "NOT_LISTED"}
         result = await self._validate_candidates(session, scored, title, isbn)
@@ -47,18 +63,32 @@ class Crawler:
                 return {"success": False, "error": "No search form found"}
 
             search_url_template = await discovery_session.get_url()
+            print(
+                f"[Crawler] discovered search_url_template={search_url_template}",
+                file=sys.stderr,
+            )
 
         # Step 2: build the real search URL and fetch results
         async with BrowserSession(config) as search_session:
             query = isbn if isbn else title
             actual_search_url = self._build_search_url(search_url_template, query)
-            print("Navigating to search URL:", actual_search_url)
+            print(
+                f"[Crawler] discovery search_url={actual_search_url}", file=sys.stderr
+            )
             await search_session.navigate(actual_search_url)
             html = await search_session.get_html()
 
             # Step 3: score candidates from search results
             candidates = self._extract_candidate_links(html)
+            print(
+                f"[Crawler] extracted {len(candidates)} candidate links from discovery search results",
+                file=sys.stderr,
+            )
             scored = self._score_candidates(candidates, isbn, title, base_url)
+            print(
+                f"[Crawler] scored {len(scored)} candidates; top={self._format_top_candidates(scored)}",
+                file=sys.stderr,
+            )
             if not scored:
                 return {"success": False, "product_url": None, "status": "NOT_LISTED"}
             else:
@@ -141,15 +171,31 @@ class Crawler:
         depth: int = 3,
     ) -> dict:
         for candidate in scored[:depth]:
-            await session.navigate(candidate["url"])
-            html = await session.get_html()
-            validation = self._validate_from_html(html, candidate["url"], title, isbn)
-            if validation["valid"]:
-                return {
-                    "success": True,
-                    "product_url": candidate["url"],
-                    "confidence": round(validation["validation_score"] / 9, 2),
-                }
+            print(
+                f"[Crawler] validating candidate url={candidate['url']} score={candidate.get('match_score')}",
+                file=sys.stderr,
+            )
+            try:
+                await session.navigate(candidate["url"])
+                html = await session.get_html()
+                validation = self._validate_from_html(
+                    html, candidate["url"], title, isbn
+                )
+                print(
+                    f"[Crawler] validation result url={candidate['url']} valid={validation['valid']} score={validation['validation_score']} findings={validation['findings']}",
+                    file=sys.stderr,
+                )
+                if validation["valid"]:
+                    return {
+                        "success": True,
+                        "product_url": candidate["url"],
+                        "confidence": round(validation["validation_score"] / 9, 2),
+                    }
+            except Exception as e:
+                print(
+                    f"[Crawler] candidate navigation/validation failed url={candidate['url']} error={e}",
+                    file=sys.stderr,
+                )
         return {"success": False, "product_url": None, "status": "NOT_LISTED"}
 
     def _build_search_url(self, base_url, query):
@@ -236,6 +282,11 @@ class Crawler:
 
             # Normalize to absolute URL
             absolute_url = urljoin(base_url, link["href"])
+
+            # EXCLUDE: Pseudo-links (javascript:void(0), mailto:, tel:)
+            if not absolute_url.startswith("http"):
+                continue
+
             score = keyword_matches
 
             # +10: Likely a product page (has /product/, /item/, /p/, /book/, /BookDetail/ in path)
@@ -263,3 +314,9 @@ class Crawler:
         # Sort by match score (descending)
         scored.sort(key=lambda x: x["match_score"], reverse=True)
         return scored
+
+    def _format_top_candidates(self, scored: list, limit: int = 5) -> str:
+        top = []
+        for candidate in scored[:limit]:
+            top.append(f"{candidate.get('match_score')}:{candidate.get('url')}")
+        return " | ".join(top) if top else "none"

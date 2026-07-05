@@ -285,16 +285,35 @@ class Orchestrator:
         store = self.db_writer.get_store(pair["store_id"])
         urls = {
             "base_url": store["base_url"],
-            "search_endpoint_url": store["search_url_template"],
+            "search_url_template": store["search_url_template"],
         }
+        print(
+            f"[Orchestrator] Path A crawl start pair_id={pair['id']} book={pair['book_name']!r} store={pair['store_name']!r} base_url={urls['base_url']} search_url_template={urls['search_url_template']}",
+            file=sys.stderr,
+        )
 
-        crawl_result = await crawler.find_product_url(
-            urls=urls, title=pair["book_name"], isbn=pair["book_isbn"], session=session
+        try:
+            crawl_result = await crawler.find_product_url(
+                urls=urls,
+                title=pair["book_name"],
+                isbn=pair["book_isbn"],
+                session=session,
+            )
+        except Exception as e:
+            print(
+                f"[Orchestrator] Path A crawler exception pair_id={pair['id']} book={pair['book_name']!r} store={pair['store_name']!r} error={e}",
+                file=sys.stderr,
+            )
+            raise
+
+        print(
+            f"[Orchestrator] Path A crawl result pair_id={pair['id']} success={crawl_result.get('success') if crawl_result else None} status={crawl_result.get('status') if crawl_result else None} error={crawl_result.get('error') if crawl_result else None} product_url={crawl_result.get('product_url') if crawl_result else None} confidence={crawl_result.get('confidence') if crawl_result else None}",
+            file=sys.stderr,
         )
 
         if not crawl_result or not crawl_result.get("success"):
             raise Exception(
-                f"Crawler failed to discover URL: {crawl_result.get('reason', 'Unknown error')}"
+                f"Crawler failed to discover URL: {crawl_result.get('error', 'Unknown error') if crawl_result else 'No result returned'}"
             )
 
         if store["search_url_template"] is None and crawl_result.get(

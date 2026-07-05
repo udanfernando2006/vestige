@@ -1,7 +1,7 @@
 import os
 import pytest
 from pipeline.orchestrator import Orchestrator
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture(scope="module")
@@ -142,3 +142,58 @@ class TestNeedsSetup:
         settings = {"LLM_MODE": "selector", "LLM_DISCOVERY_ENABLED": "false"}
         pair = _pair(product_url="https://sarasavi.lk/books/123")
         assert orchestrator.determine_path(pair, settings) == "NEEDS_SETUP"
+
+
+# ---------------------------------------------------------------------------
+# Path A logging regression
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_path_a_logs_crawl_context_and_result(orchestrator, capsys):
+    pair = {
+        "id": 1,
+        "book_id": 1,
+        "store_id": 1,
+        "book_name": "The Last Wish",
+        "book_isbn": "9780316452465",
+        "store_name": "Sarasavi",
+        "product_url": None,
+        "price_selector": None,
+        "stock_selector": None,
+        "status": "PENDING",
+    }
+    session = MagicMock()
+    settings = {"LLM_MODE": "direct", "LLM_DISCOVERY_ENABLED": "false"}
+
+    orchestrator.db_writer.get_store.return_value = {
+        "base_url": "https://sarasavi.lk",
+        "search_url_template": "https://sarasavi.lk/?s=test",
+    }
+    orchestrator.db_writer.update_pair_url = MagicMock()
+    orchestrator.db_writer.update_store_search_template = MagicMock()
+
+    crawl_result = {
+        "success": True,
+        "product_url": "https://sarasavi.lk/product/the-last-wish",
+        "confidence": 0.91,
+        "search_url_template": "https://sarasavi.lk/?s=test",
+    }
+
+    with patch(
+        "pipeline.orchestrator.Crawler.find_product_url",
+        new=AsyncMock(return_value=crawl_result),
+    ):
+        with patch.object(
+            orchestrator,
+            "_run_pair_path_d",
+            new=AsyncMock(return_value={"pair_id": 1, "status": "COMPLETED"}),
+        ):
+            result = await orchestrator._run_pair_path_a(pair, session, settings)
+
+    captured = capsys.readouterr()
+
+    assert result == {"pair_id": 1, "status": "COMPLETED"}
+    assert "[Orchestrator] Path A crawl start" in captured.err
+    assert "[Orchestrator] Path A crawl result" in captured.err
+    assert "success=True" in captured.err
