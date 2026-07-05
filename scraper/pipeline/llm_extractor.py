@@ -196,6 +196,53 @@ class Extractor:
 
         return self._call_llm(user_content, SEMANTIC_SYSTEM_PROMPT)
 
+    def classify_stock_status(self, raw_text: str) -> "bool | None":
+        """
+        Lightweight fallback for a stock-status string that neither the
+        hardcoded phrase list nor any CUSTOM_STOCK_*_PATTERNS regex could
+        classify. Takes only the short raw text (e.g. "Low stock: 4 left"),
+        never HTML — clean_html()/self.engine are irrelevant here, so this
+        works identically regardless of which role's credentials (DIRECT_*
+        or SELECTOR_*) were used to construct this Extractor.
+        Returns True/False, or None if the model itself can't tell.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a retail stock-status classifier. Read the "
+                            "text and reply with exactly one word: TRUE if the "
+                            "item can currently be purchased, FALSE if it is out "
+                            "of stock, or UNKNOWN if you cannot tell."
+                        ),
+                    },
+                    {"role": "user", "content": f"Text: {raw_text}"},
+                ],
+                temperature=0.0,
+                max_tokens=5,
+            )
+
+            if not response or not getattr(response, "choices", None):
+                return None
+
+            content = response.choices[0].message.content
+            if not content:
+                return None
+
+            result = content.strip().upper()
+            if "TRUE" in result:
+                return True
+            if "FALSE" in result:
+                return False
+            return None
+
+        except Exception as e:
+            print(f"[LLM Fallback Error]: {e}", file=sys.stderr)
+            return None
+
     def extract_selectors(self, cleaned_html: str, target_title: str) -> dict:
         user_content = SELECTOR_USER_PROMPT.format(
             target_title=target_title, cleaned_html=cleaned_html

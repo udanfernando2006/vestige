@@ -87,6 +87,82 @@ class TestParseStockStatus:
         # "Only 3 left in stock" should still read as in-stock
         assert scraper.parse_stock_status("Only 3 left in stock") is True
 
+    def test_low_stock_with_count(self, scraper):
+        # Regression test: the confirmed real-world case that prompted the
+        # built-in "low stock:? \d+ left" pattern — previously fell through
+        # to None (surfaced as status=ERROR, reason=unparseable_stock_status).
+        assert scraper.parse_stock_status("Low stock: 4 left") is True
+
+    def test_low_stock_without_colon(self, scraper):
+        # Pattern uses ":?" — colon is optional
+        assert scraper.parse_stock_status("Low stock 12 left") is True
+
+    def test_low_stock_case_insensitive(self, scraper):
+        assert scraper.parse_stock_status("LOW STOCK: 1 LEFT") is True
+
+    # --- custom_in / custom_out patterns ---
+
+    def test_custom_in_pattern_matches(self, scraper):
+        assert (
+            scraper.parse_stock_status(
+                "Ships in 2-3 days", custom_in=r"ships in \d+-\d+ days"
+            )
+            is True
+        )
+
+    def test_custom_out_pattern_matches(self, scraper):
+        assert (
+            scraper.parse_stock_status(
+                "Currently backordered", custom_out=r"backordered"
+            )
+            is False
+        )
+
+    def test_custom_patterns_are_comma_separated(self, scraper):
+        patterns = r"backordered,discontinued,no longer sold"
+        assert (
+            scraper.parse_stock_status(
+                "This title is discontinued", custom_out=patterns
+            )
+            is False
+        )
+
+    def test_custom_pattern_does_not_override_builtin_when_absent(self, scraper):
+        # A custom_in pattern that doesn't match the text shouldn't
+        # accidentally suppress the built-in phrase list from still working.
+        assert (
+            scraper.parse_stock_status(
+                "In Stock", custom_in=r"totally unrelated pattern"
+            )
+            is True
+        )
+
+    def test_custom_out_pattern_still_beats_builtin_in_stock_phrase(self, scraper):
+        # Out-of-stock-first ordering must hold even when the out-of-stock
+        # signal comes from a *custom* pattern and the in-stock signal comes
+        # from the *built-in* phrase list — same substring-trap precedence
+        # rule applies regardless of which list a match came from.
+        text = "Available now, ships when restocked"
+        assert (
+            scraper.parse_stock_status(text, custom_out=r"ships when restocked")
+            is False
+        )
+
+    def test_blank_custom_patterns_do_not_error(self, scraper):
+        # Empty string is the default — must not raise or match everything.
+        assert (
+            scraper.parse_stock_status("some random text", custom_in="", custom_out="")
+            is None
+        )
+
+    def test_custom_patterns_with_stray_whitespace_are_trimmed(self, scraper):
+        assert (
+            scraper.parse_stock_status(
+                "Item is currently reserved", custom_out=" reserved , held "
+            )
+            is False
+        )
+
     # --- out-of-stock signals ---
 
     def test_out_of_stock(self, scraper):
