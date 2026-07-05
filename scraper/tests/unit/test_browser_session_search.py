@@ -20,6 +20,7 @@ async def test_find_and_fill_search_prefers_search_form_over_generic_form():
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
     search_input.is_visible = AsyncMock(return_value=True)
+    search_input.get_attribute = AsyncMock(return_value="q")
 
     search_form = AsyncMock()
     search_form.query_selector = AsyncMock(return_value=search_input)
@@ -64,6 +65,7 @@ async def test_find_and_fill_search_keeps_generic_form_fallback():
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
     search_input.is_visible = AsyncMock(return_value=True)
+    search_input.get_attribute = AsyncMock(return_value="q")
 
     generic_form = AsyncMock()
     generic_form.query_selector = AsyncMock(return_value=search_input)
@@ -100,6 +102,7 @@ async def test_find_and_fill_search_opens_hidden_form_before_falling_back_to_url
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
     search_input.is_visible = AsyncMock(side_effect=[False, False])
+    search_input.get_attribute = AsyncMock(return_value="q")
 
     search_form = AsyncMock()
     search_form.query_selector = AsyncMock(return_value=search_input)
@@ -147,6 +150,7 @@ async def test_find_and_fill_search_uses_visible_hidden_form_after_reveal():
     search_input.fill = AsyncMock(return_value=None)
     search_input.press = AsyncMock(return_value=None)
     search_input.is_visible = AsyncMock(side_effect=[False, True])
+    search_input.get_attribute = AsyncMock(return_value="q")
 
     search_form = AsyncMock()
     search_form.query_selector = AsyncMock(return_value=search_input)
@@ -181,4 +185,4 @@ async def test_find_and_fill_search_uses_visible_hidden_form_after_reveal():
     search_trigger.click.assert_awaited_once()
     search_input.fill.assert_awaited_once_with("Chainsaw Man")
     search_input.press.assert_awaited_once_with("Enter")
-    page.goto.assert_not_awaited()
+    page.goto.assert_not_called()

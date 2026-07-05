@@ -197,10 +197,10 @@ class BrowserSession:
             field = await form.query_selector(selector)
             if field:
                 input_name = await field.get_attribute("name")
-                if input_name:
+                if isinstance(input_name, str) and input_name.strip():
                     break
 
-        if not input_name:
+        if not isinstance(input_name, str) or not input_name.strip():
             input_name = "q"
 
         current_url = self._page.url

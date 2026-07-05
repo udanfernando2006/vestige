@@ -235,6 +235,14 @@ class Crawler:
         scored = []
         title_lower = title.lower()
         keywords = title_lower.split()
+        product_path_patterns = [
+            "/product/",
+            "/products/",
+            "/item/",
+            "/p/",
+            "/book/",
+            "/bookdetail",
+        ]
 
         for link in links:
             href_lower = link["href"].lower()
@@ -289,17 +297,19 @@ class Crawler:
 
             score = keyword_matches
 
-            # +10: Likely a product page (has /product/, /item/, /p/, /book/, /BookDetail/ in path)
-            if any(
-                pattern in href_lower
-                for pattern in ["/product/", "/item/", "/p/", "/book/", "/bookdetail"]
-            ):
+            # +10: Likely a product page.
+            # Tested stores (Sarasavi, Jumpbooks, Books.lk, Jeyabookcentre, MDgunasena, Booxworm)
+            # consistently expose detail pages on /product/, /products/, /item/, /p/, /book/, or /BookDetail/.
+            if any(pattern in href_lower for pattern in product_path_patterns):
                 score += 10
+
+            # -8: Shopify collection pages are listings, not product detail pages.
+            elif "/collections/" in href_lower:
+                score -= 8
 
             # -5: Likely just a filter/navigation link (pure query params, no path change)
             elif "?" in link["href"] and not any(
-                pattern in href_lower
-                for pattern in ["/product/", "/item/", "/p/", "/book/", "/bookdetail"]
+                pattern in href_lower for pattern in product_path_patterns
             ):
                 score -= 5
 
