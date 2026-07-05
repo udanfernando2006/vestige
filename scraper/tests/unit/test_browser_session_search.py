@@ -22,10 +22,12 @@ async def test_find_and_fill_search_prefers_search_form_over_generic_form():
 
     search_form = AsyncMock()
     search_form.query_selector = AsyncMock(return_value=search_input)
-    search_form.get_attribute = AsyncMock(side_effect=lambda name: {
-        "action": "/search",
-        "method": "get",
-    }.get(name))
+    search_form.get_attribute = AsyncMock(
+        side_effect=lambda name: {
+            "action": "/search",
+            "method": "get",
+        }.get(name)
+    )
 
     page = MagicMock()
     page.url = "https://booxworm.lk/"
@@ -49,7 +51,9 @@ async def test_find_and_fill_search_prefers_search_form_over_generic_form():
     search_input.press.assert_awaited_once_with("Enter")
     localization_form.query_selector.assert_not_called()
     page.query_selector.assert_any_await("form[role='search']")
-    assert not any(call.args == ("form",) for call in page.query_selector.await_args_list)
+    assert not any(
+        call.args == ("form",) for call in page.query_selector.await_args_list
+    )
 
 
 @pytest.mark.asyncio
@@ -60,10 +64,12 @@ async def test_find_and_fill_search_keeps_generic_form_fallback():
 
     generic_form = AsyncMock()
     generic_form.query_selector = AsyncMock(return_value=search_input)
-    generic_form.get_attribute = AsyncMock(side_effect=lambda name: {
-        "action": "/search",
-        "method": "get",
-    }.get(name))
+    generic_form.get_attribute = AsyncMock(
+        side_effect=lambda name: {
+            "action": "/search",
+            "method": "get",
+        }.get(name)
+    )
 
     page = MagicMock()
     page.url = "https://example.com/"
