@@ -1,6 +1,6 @@
 [package]
 name = "vestige-ui"
-version = "1.5.0"
+version = "1.6.0"
 description = "Desktop UI for Vestige, a config-driven book price and availability tracker for Sri Lankan online bookstores."
 authors = ["udanfernando2006"]
 edition = "2021"
