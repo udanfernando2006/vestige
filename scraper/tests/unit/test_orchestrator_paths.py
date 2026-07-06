@@ -145,12 +145,16 @@ class TestNeedsSetup:
 
 
 # ---------------------------------------------------------------------------
-# Path A logging regression
+# Path A failure regression
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_path_a_logs_crawl_context_and_result(orchestrator, capsys):
+@pytest.mark.parametrize(
+    "crawl_result",
+    [None, {"success": False, "error": "No search form found"}],
+)
+async def test_path_a_raises_when_crawl_fails(orchestrator, crawl_result):
     pair = {
         "id": 1,
         "book_id": 1,
@@ -173,27 +177,9 @@ async def test_path_a_logs_crawl_context_and_result(orchestrator, capsys):
     orchestrator.db_writer.update_pair_url = MagicMock()
     orchestrator.db_writer.update_store_search_template = MagicMock()
 
-    crawl_result = {
-        "success": True,
-        "product_url": "https://sarasavi.lk/product/the-last-wish",
-        "confidence": 0.91,
-        "search_url_template": "https://sarasavi.lk/?s=test",
-    }
-
     with patch(
         "pipeline.orchestrator.Crawler.find_product_url",
         new=AsyncMock(return_value=crawl_result),
     ):
-        with patch.object(
-            orchestrator,
-            "_run_pair_path_d",
-            new=AsyncMock(return_value={"pair_id": 1, "status": "COMPLETED"}),
-        ):
-            result = await orchestrator._run_pair_path_a(pair, session, settings)
-
-    captured = capsys.readouterr()
-
-    assert result == {"pair_id": 1, "status": "COMPLETED"}
-    assert "[Orchestrator] Path A crawl start" in captured.err
-    assert "[Orchestrator] Path A crawl result" in captured.err
-    assert "success=True" in captured.err
+        with pytest.raises(Exception, match="Crawler failed to discover URL"):
+            await orchestrator._run_pair_path_a(pair, session, settings)

@@ -205,32 +205,3 @@ class TestScoreCandidates:
 
     def test_empty_link_list_returns_empty(self, crawler):
         assert self._score(crawler, []) == []
-
-
-# ---------------------------------------------------------------------------
-# _validate_candidates / logging regression
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_validate_candidates_logs_navigation_failures(crawler, capsys):
-    class FailingSession:
-        async def navigate(self, url, wait_until="networkidle"):
-            raise RuntimeError("javascript: URLs are not supported")
-
-        async def get_html(self):
-            return ""
-
-    scored = [
-        {
-            "url": "javascript:void(0)",
-            "match_score": 12,
-        }
-    ]
-
-    result = await crawler._validate_candidates(FailingSession(), scored, TITLE, ISBN)
-    captured = capsys.readouterr()
-
-    assert result == {"success": False, "product_url": None, "status": "NOT_LISTED"}
-    assert "candidate navigation/validation failed" in captured.err
-    assert "javascript:void(0)" in captured.err

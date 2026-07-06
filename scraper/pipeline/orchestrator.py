@@ -279,7 +279,6 @@ class Orchestrator:
         Path A: Discovery.
         Crawls the store to find the product URL, updates the DB, and delegates to Path B or D.
         """
-        print(f"Path A: Initiating Crawler for '{pair['book_name']}'")
         crawler = Crawler()
 
         store = self.db_writer.get_store(pair["store_id"])
@@ -287,11 +286,6 @@ class Orchestrator:
             "base_url": store["base_url"],
             "search_url_template": store["search_url_template"],
         }
-        print(
-            f"[Orchestrator] Path A crawl start pair_id={pair['id']} book={pair['book_name']!r} store={pair['store_name']!r} base_url={urls['base_url']} search_url_template={urls['search_url_template']}",
-            file=sys.stderr,
-        )
-
         try:
             crawl_result = await crawler.find_product_url(
                 urls=urls,
@@ -300,16 +294,7 @@ class Orchestrator:
                 session=session,
             )
         except Exception as e:
-            print(
-                f"[Orchestrator] Path A crawler exception pair_id={pair['id']} book={pair['book_name']!r} store={pair['store_name']!r} error={e}",
-                file=sys.stderr,
-            )
             raise
-
-        print(
-            f"[Orchestrator] Path A crawl result pair_id={pair['id']} success={crawl_result.get('success') if crawl_result else None} status={crawl_result.get('status') if crawl_result else None} error={crawl_result.get('error') if crawl_result else None} product_url={crawl_result.get('product_url') if crawl_result else None} confidence={crawl_result.get('confidence') if crawl_result else None}",
-            file=sys.stderr,
-        )
 
         if not crawl_result or not crawl_result.get("success"):
             raise Exception(
@@ -324,7 +309,6 @@ class Orchestrator:
             )
 
         found_url = crawl_result.get("product_url")
-        print(f"Path A: Successfully discovered URL: {found_url}")
 
         # Save newly discovered URL to DB
         self.db_writer.update_pair_url(pair["id"], found_url)
@@ -334,7 +318,6 @@ class Orchestrator:
 
         # Determine next routing based on LLM_MODE
         next_path = "D" if self.get_llm_mode(settings) == "direct" else "B"
-        print(f"Path A completed. Routing to Path {next_path}")
 
         if next_path == "B":
             return await self._run_pair_path_b(pair, session, settings)
