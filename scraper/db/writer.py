@@ -27,6 +27,8 @@ SETTINGS_KEYS = [
     "DIRECT_API_KEY",
     "DIRECT_MODEL",
     "SCRAPE_INTERVAL_HOURS",
+    "CUSTOM_STOCK_IN_PATTERNS",
+    "CUSTOM_STOCK_OUT_PATTERNS",
 ]
 
 
@@ -196,7 +198,27 @@ class DBWriter:
                         )
                         session.add(pair)
             session.commit()
-            print("✓ Config synced to database")
+
+        # Sync user-editable stock-status regex patterns, if present.
+        # Unlike series/books/stores/tracking above (insert-only, never
+        # touched again after first seed), this uses apply_setting_update()
+        # so an edit to the config file is picked up on every run, not just
+        # the first one — matches the fact that main.py's run_once() calls
+        # sync_config() unconditionally on every invocation.
+        custom_regex = config_data.get("availability-regex", {})
+        if custom_regex:
+            in_stock = custom_regex.get("in_stock", [])
+            out_of_stock = custom_regex.get("out_of_stock", [])
+            if in_stock:
+                self.apply_setting_update(
+                    "CUSTOM_STOCK_IN_PATTERNS", ",".join(in_stock)
+                )
+            if out_of_stock:
+                self.apply_setting_update(
+                    "CUSTOM_STOCK_OUT_PATTERNS", ",".join(out_of_stock)
+                )
+
+        print("✓ Config synced to database")
 
     # =========================================================================
     # TRACKING PAIR QUERIES (WITH EAGER LOADING)

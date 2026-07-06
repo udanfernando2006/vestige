@@ -149,6 +149,81 @@ class Orchestrator:
 
         return result
 
+    def _classify_stock_fallback(self, settings: dict, raw_text: str) -> "bool | None":
+        """
+        Last-resort classification for a raw stock-status string that both
+        the hardcoded phrase list and any CUSTOM_STOCK_*_PATTERNS regex
+        failed to parse. Tries DIRECT_* credentials first, then falls back
+        to SELECTOR_* credentials if DIRECT_* isn't configured (the
+        selector-discovery model is chosen for large-context HTML parsing,
+        which is strictly more capable than what this short-text call
+        needs — the reverse substitution is NOT attempted elsewhere).
+        Returns None (never raises) if neither role is configured or both
+        calls fail, so callers can fall through to the existing ERROR
+        status unchanged.
+        """
+        for base_key, key_key, model_key in (
+            ("DIRECT_API_BASE", "DIRECT_API_KEY", "DIRECT_MODEL"),
+            ("SELECTOR_API_BASE", "SELECTOR_API_KEY", "SELECTOR_MODEL"),
+        ):
+            api_base = settings.get(base_key)
+            model_name = settings.get(model_key)
+            if not api_base or not model_name:
+                continue
+            role = "DIRECT" if base_key.startswith("DIRECT") else "SELECTOR"
+            print(
+                f"[Stock Fallback] Trying {role} role (model={model_name}) for: '{raw_text}'"
+            )
+            try:
+                extractor = Extractor(
+                    {
+                        "api_base": api_base,
+                        "api_key": settings.get(key_key),
+                        "model_name": model_name,
+                    }
+                )
+                result = extractor.classify_stock_status(raw_text)
+                if result is not None:
+                    print(
+                        f"[Stock Fallback] {role} role (model={model_name}) resolved "
+                        f"'{raw_text}' -> {'IN_STOCK' if result else 'OUT_OF_STOCK'}"
+                    )
+                    return result
+                print(
+                    f"[Stock Fallback] {role} role (model={model_name}) could not "
+                    f"classify '{raw_text}'"
+                )
+            except Exception as e:
+                print(f"[Stock Fallback] {base_key} attempt failed: {e}")
+                continue
+        return None
+
+    def _apply_stock_fallback_if_needed(
+        self, scrape_data: AvailabilityResult, settings: dict
+    ) -> AvailabilityResult:
+        """
+        Shared by Path B and Path C (both end in an identical cached-selector
+        scrape). If the regex parse left the result as ERROR/unparseable_stock_status,
+        attempts the LLM fallback and overwrites in_stock/status/reason on
+        success. Leaves scrape_data untouched (still ERROR) if the fallback
+        can't resolve it either, or if there's no stock text to classify at all
+        (e.g. selector matched nothing — that's the separate selector_not_found
+        case checked immediately after this call, in each path).
+        """
+        if (
+            scrape_data.status == "ERROR"
+            and scrape_data.reason == "unparseable_stock_status"
+            and scrape_data.raw_stock_text
+        ):
+            fallback_result = self._classify_stock_fallback(
+                settings, scrape_data.raw_stock_text
+            )
+            if fallback_result is not None:
+                scrape_data.in_stock = fallback_result
+                scrape_data.status = "IN_STOCK" if fallback_result else "OUT_OF_STOCK"
+                scrape_data.reason = None
+        return scrape_data
+
     def collect_run_summary(self, results: List[Dict[str, Any]]) -> dict:
         """Aggregates all results, including a list of skipped pairs due to NEEDS_SETUP."""
         summary = {
@@ -216,22 +291,26 @@ class Orchestrator:
         Path A: Discovery.
         Crawls the store to find the product URL, updates the DB, and delegates to Path B or D.
         """
-        print(f"Path A: Initiating Crawler for '{pair['book_name']}'")
         crawler = Crawler()
 
         store = self.db_writer.get_store(pair["store_id"])
         urls = {
             "base_url": store["base_url"],
-            "search_endpoint_url": store["search_url_template"],
+            "search_url_template": store["search_url_template"],
         }
-
-        crawl_result = await crawler.find_product_url(
-            urls=urls, title=pair["book_name"], isbn=pair["book_isbn"], session=session
-        )
+        try:
+            crawl_result = await crawler.find_product_url(
+                urls=urls,
+                title=pair["book_name"],
+                isbn=pair["book_isbn"],
+                session=session,
+            )
+        except Exception:
+            raise
 
         if not crawl_result or not crawl_result.get("success"):
             raise Exception(
-                f"Crawler failed to discover URL: {crawl_result.get('reason', 'Unknown error')}"
+                f"Crawler failed to discover URL: {crawl_result.get('error', 'Unknown error') if crawl_result else 'No result returned'}"
             )
 
         if store["search_url_template"] is None and crawl_result.get(
@@ -242,7 +321,6 @@ class Orchestrator:
             )
 
         found_url = crawl_result.get("product_url")
-        print(f"Path A: Successfully discovered URL: {found_url}")
 
         # Save newly discovered URL to DB
         self.db_writer.update_pair_url(pair["id"], found_url)
@@ -252,7 +330,6 @@ class Orchestrator:
 
         # Determine next routing based on LLM_MODE
         next_path = "D" if self.get_llm_mode(settings) == "direct" else "B"
-        print(f"Path A completed. Routing to Path {next_path}")
 
         if next_path == "B":
             return await self._run_pair_path_b(pair, session, settings)
@@ -309,8 +386,13 @@ class Orchestrator:
             "availability": {"selector": updated_pair["stock_selector"]},
         }
         scrape_data = await scraper.scrape(
-            updated_pair["product_url"], selectors, session=session
+            updated_pair["product_url"],
+            selectors,
+            session=session,
+            custom_in=settings.get("CUSTOM_STOCK_IN_PATTERNS", ""),
+            custom_out=settings.get("CUSTOM_STOCK_OUT_PATTERNS", ""),
         )
+        scrape_data = self._apply_stock_fallback_if_needed(scrape_data, settings)
 
         if scrape_data.raw_stock_text is None and scrape_data.raw_price_text is None:
             raise Exception("selector_not_found")
@@ -318,7 +400,7 @@ class Orchestrator:
         return {"pair_id": pair["id"], "status": "COMPLETED", "result": scrape_data}
 
     async def _run_pair_path_c(
-        self, pair: TrackingPair, session: BrowserSession
+        self, pair: TrackingPair, session: BrowserSession, settings: dict
     ) -> dict:
         """Path C: Standard Cached CSS Selector Scrape."""
         scraper = Scraper()
@@ -328,8 +410,13 @@ class Orchestrator:
         }
 
         scrape_data = await scraper.scrape(
-            pair["product_url"], selectors, session=session
+            pair["product_url"],
+            selectors,
+            session=session,
+            custom_in=settings.get("CUSTOM_STOCK_IN_PATTERNS", ""),
+            custom_out=settings.get("CUSTOM_STOCK_OUT_PATTERNS", ""),
         )
+        scrape_data = self._apply_stock_fallback_if_needed(scrape_data, settings)
 
         if scrape_data.raw_stock_text is None and scrape_data.raw_price_text is None:
             raise Exception("selector_not_found")
@@ -399,7 +486,7 @@ class Orchestrator:
                 elif path == "B":
                     return await self._run_pair_path_b(pair, session, settings)
                 elif path == "C":
-                    return await self._run_pair_path_c(pair, session)
+                    return await self._run_pair_path_c(pair, session, settings)
                 elif path == "D":
                     return await self._run_pair_path_d(pair, session, settings)
                 else:

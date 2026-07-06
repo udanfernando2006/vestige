@@ -243,6 +243,96 @@ class TestCallLlm:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# classify_stock_status — short-text-only LLM fallback, no HTML/engine involved
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyStockStatus:
+    def test_true_response_returns_true(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("TRUE")
+        assert extractor.classify_stock_status("Low stock: 4 left") is True
+
+    def test_false_response_returns_false(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("FALSE")
+        assert extractor.classify_stock_status("Currently unavailable-ish") is False
+
+    def test_response_is_case_insensitive(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("true")
+        assert extractor.classify_stock_status("some text") is True
+
+    def test_unknown_response_returns_none(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response(
+            "UNKNOWN"
+        )
+        assert extractor.classify_stock_status("ambiguous text") is None
+
+    def test_unexpected_content_returns_none(self):
+        # Neither TRUE nor FALSE appears anywhere in the response
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response(
+            "I cannot determine this."
+        )
+        assert extractor.classify_stock_status("some text") is None
+
+    def test_empty_content_returns_none(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("")
+        assert extractor.classify_stock_status("some text") is None
+
+    def test_none_choices_returns_none(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        response = MagicMock()
+        response.choices = None
+        extractor.client.chat.completions.create.return_value = response
+        assert extractor.classify_stock_status("some text") is None
+
+    def test_empty_choices_array_returns_none(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        response = MagicMock()
+        response.choices = []
+        extractor.client.chat.completions.create.return_value = response
+        assert extractor.classify_stock_status("some text") is None
+
+    def test_exception_returns_none_not_raise(self):
+        # Mirrors _call_llm's resilience: a broke/unreachable backend here
+        # must fall through to None (letting the caller keep the existing
+        # ERROR status) rather than propagate and crash the pipeline run.
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.side_effect = Exception("backend down")
+        assert extractor.classify_stock_status("some text") is None
+
+    def test_uses_configured_model_name(self):
+        extractor = _make_extractor(model_name="my-direct-model")
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("TRUE")
+        extractor.classify_stock_status("some text")
+        _, kwargs = extractor.client.chat.completions.create.call_args
+        assert kwargs["model"] == "my-direct-model"
+
+    def test_raw_text_passed_through_to_prompt(self):
+        extractor = _make_extractor()
+        extractor.client = MagicMock()
+        extractor.client.chat.completions.create.return_value = _mock_response("TRUE")
+        extractor.classify_stock_status("Low stock: 4 left")
+        _, kwargs = extractor.client.chat.completions.create.call_args
+        user_message = kwargs["messages"][1]["content"]
+        assert "Low stock: 4 left" in user_message
+
+
 class TestExtractWrappers:
     def test_extract_selectors_returns_selectors_key_contents(self, monkeypatch):
         extractor = _make_extractor()

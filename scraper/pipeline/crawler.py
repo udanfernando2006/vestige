@@ -141,15 +141,20 @@ class Crawler:
         depth: int = 3,
     ) -> dict:
         for candidate in scored[:depth]:
-            await session.navigate(candidate["url"])
-            html = await session.get_html()
-            validation = self._validate_from_html(html, candidate["url"], title, isbn)
-            if validation["valid"]:
-                return {
-                    "success": True,
-                    "product_url": candidate["url"],
-                    "confidence": round(validation["validation_score"] / 9, 2),
-                }
+            try:
+                await session.navigate(candidate["url"])
+                html = await session.get_html()
+                validation = self._validate_from_html(
+                    html, candidate["url"], title, isbn
+                )
+                if validation["valid"]:
+                    return {
+                        "success": True,
+                        "product_url": candidate["url"],
+                        "confidence": round(validation["validation_score"] / 9, 2),
+                    }
+            except Exception:
+                pass
         return {"success": False, "product_url": None, "status": "NOT_LISTED"}
 
     def _build_search_url(self, base_url, query):
@@ -189,6 +194,14 @@ class Crawler:
         scored = []
         title_lower = title.lower()
         keywords = title_lower.split()
+        product_path_patterns = [
+            "/product/",
+            "/products/",
+            "/item/",
+            "/p/",
+            "/book/",
+            "/bookdetail",
+        ]
 
         for link in links:
             href_lower = link["href"].lower()
@@ -236,19 +249,26 @@ class Crawler:
 
             # Normalize to absolute URL
             absolute_url = urljoin(base_url, link["href"])
+
+            # EXCLUDE: Pseudo-links (javascript:void(0), mailto:, tel:)
+            if not absolute_url.startswith("http"):
+                continue
+
             score = keyword_matches
 
-            # +10: Likely a product page (has /product/, /item/, /p/, /book/, /BookDetail/ in path)
-            if any(
-                pattern in href_lower
-                for pattern in ["/product/", "/item/", "/p/", "/book/", "/bookdetail"]
-            ):
+            # +10: Likely a product page.
+            # Tested stores (Sarasavi, Jumpbooks, Books.lk, Jeyabookcentre, MDgunasena, Booxworm)
+            # consistently expose detail pages on /product/, /products/, /item/, /p/, /book/, or /BookDetail/.
+            if any(pattern in href_lower for pattern in product_path_patterns):
                 score += 10
+
+            # -8: Shopify collection pages are listings, not product detail pages.
+            elif "/collections/" in href_lower:
+                score -= 8
 
             # -5: Likely just a filter/navigation link (pure query params, no path change)
             elif "?" in link["href"] and not any(
-                pattern in href_lower
-                for pattern in ["/product/", "/item/", "/p/", "/book/", "/bookdetail"]
+                pattern in href_lower for pattern in product_path_patterns
             ):
                 score -= 5
 
@@ -263,3 +283,9 @@ class Crawler:
         # Sort by match score (descending)
         scored.sort(key=lambda x: x["match_score"], reverse=True)
         return scored
+
+    def _format_top_candidates(self, scored: list, limit: int = 5) -> str:
+        top = []
+        for candidate in scored[:limit]:
+            top.append(f"{candidate.get('match_score')}:{candidate.get('url')}")
+        return " | ".join(top) if top else "none"

@@ -95,6 +95,28 @@ class TestScoreCandidates:
     def _score(self, crawler, links):
         return crawler._score_candidates(links, isbn=ISBN, title=TITLE, base_url=BASE)
 
+    def test_collection_url_loses_to_product_url(self, crawler):
+        booxworm_title = "Chainsawman Vol 4"
+        links = [
+            {
+                "href": "/collections/chainsawman-vol-4",
+                "text": booxworm_title,
+                "url": f"{BASE}/collections/chainsawman-vol-4",
+            },
+            {
+                "href": "/products/chainsawman-vol-4-tatsuki-fujimoto?_pos=1&_sid=d21f621bf&_ss=r",
+                "text": "Chainsawman Vol 4 by Tatsuki Fujimoto",
+                "url": f"{BASE}/products/chainsawman-vol-4-tatsuki-fujimoto?_pos=1&_sid=d21f621bf&_ss=r",
+            },
+        ]
+
+        scored = crawler._score_candidates(
+            links, isbn=None, title=booxworm_title, base_url=BASE
+        )
+
+        assert scored[0]["url"].startswith(f"{BASE}/products/")
+        assert scored[0]["url"] != f"{BASE}/collections/chainsawman-vol-4"
+
     def test_product_path_prefix_scores_high(self, crawler):
         links = [
             {

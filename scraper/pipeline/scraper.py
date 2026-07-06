@@ -20,17 +20,29 @@ class Scraper:
         selectors: dict,
         wait_selectors=None,
         session: BrowserSession = None,
+        custom_in: str = "",
+        custom_out: str = "",
     ) -> AvailabilityResult:
         if session:
-            return await self._do_scrape(session, url, selectors, wait_selectors)
+            return await self._do_scrape(
+                session, url, selectors, wait_selectors, custom_in, custom_out
+            )
         else:
             async with BrowserSession(
                 {"headless": self._headless, "timeout": self._timeout}
             ) as session:
-                return await self._do_scrape(session, url, selectors, wait_selectors)
+                return await self._do_scrape(
+                    session, url, selectors, wait_selectors, custom_in, custom_out
+                )
 
     async def _do_scrape(
-        self, session: BrowserSession, url: str, selectors: dict, wait_selectors=None
+        self,
+        session: BrowserSession,
+        url: str,
+        selectors: dict,
+        wait_selectors=None,
+        custom_in: str = "",
+        custom_out: str = "",
     ) -> AvailabilityResult:
         await self._rate_limit_wait()
         await session.navigate(url)
@@ -54,7 +66,9 @@ class Scraper:
             result.price = self.parse_price(extracted["price"])
 
         if extracted.get("availability"):
-            result.in_stock = self.parse_stock_status(extracted["availability"])
+            result.in_stock = self.parse_stock_status(
+                extracted["availability"], custom_in=custom_in, custom_out=custom_out
+            )
 
         if result.in_stock is True:
             result.status = "IN_STOCK"
@@ -155,40 +169,50 @@ class Scraper:
                 return None
         return None
 
-    def parse_stock_status(self, raw_text: str):
+    def parse_stock_status(
+        self, raw_text: str, custom_in: str = "", custom_out: str = ""
+    ):
+        """
+        Regex-only matching. Built-in patterns and any CUSTOM_STOCK_*_PATTERNS
+        (comma-separated regex strings from CUSTOM_STOCK_IN_PATTERNS/
+        CUSTOM_STOCK_OUT_PATTERNS, see DBWriter.get_settings()) are merged
+        into one list per direction and checked uniformly via re.search() —
+        no separate substring pass. Out-of-stock is still checked FIRST:
+        "unavailable" contains "available", so order between the two lists
+        remains critical regardless of source (built-in or user-supplied).
+        """
         if not raw_text:
             return None
 
         text = raw_text.lower().strip()
 
-        # Out of stock checked FIRST — "unavailable" contains "available"
-        # so order between the two blocks is critical
-        if any(
-            phrase in text
-            for phrase in [
-                "out of stock",
-                "sold out",
-                "unavailable",
-                "not available",
-                "pre-order",
-                "out-of-stock",
-            ]
-        ):
+        out_of_stock_patterns = [
+            r"out of stock",
+            r"sold out",
+            r"unavailable",
+            r"not available",
+            r"pre-order",
+            r"out-of-stock",
+        ]
+        in_stock_patterns = [
+            r"in stock",
+            r"in-stock",
+            r"available",
+            r"add to cart",
+            r"add to basket",
+            r"in stock now",
+            r"ready to ship",
+            r"buy now",
+            r"low stock:?\s*\d+\s*left",  # confirmed: e.g. "Low stock: 4 left"
+        ]
+
+        custom_out_patterns = [p.strip() for p in custom_out.split(",") if p.strip()]
+        custom_in_patterns = [p.strip() for p in custom_in.split(",") if p.strip()]
+
+        if any(re.search(p, text) for p in out_of_stock_patterns + custom_out_patterns):
             return False
 
-        if any(
-            phrase in text
-            for phrase in [
-                "in stock",
-                "in-stock",
-                "available",
-                "add to cart",
-                "add to basket",
-                "in stock now",
-                "ready to ship",
-                "buy now",
-            ]
-        ):
+        if any(re.search(p, text) for p in in_stock_patterns + custom_in_patterns):
             return True
 
         return None
