@@ -226,17 +226,37 @@ class Extractor:
             )
 
             if not response or not getattr(response, "choices", None):
+                print(
+                    f"[Stock Classify] {self.model_name}: no choices returned for '{raw_text}'",
+                    file=sys.stderr,
+                )
                 return None
 
             content = response.choices[0].message.content
             if not content:
+                print(
+                    f"[Stock Classify] {self.model_name}: empty content for '{raw_text}'",
+                    file=sys.stderr,
+                )
                 return None
 
             result = content.strip().upper()
             if "TRUE" in result:
+                print(
+                    f"[Stock Classify] {self.model_name}: '{raw_text}' -> TRUE (in stock)",
+                    file=sys.stderr,
+                )
                 return True
             if "FALSE" in result:
+                print(
+                    f"[Stock Classify] {self.model_name}: '{raw_text}' -> FALSE (out of stock)",
+                    file=sys.stderr,
+                )
                 return False
+            print(
+                f"[Stock Classify] {self.model_name}: '{raw_text}' -> unrecognized response '{result}'",
+                file=sys.stderr,
+            )
             return None
 
         except Exception as e:

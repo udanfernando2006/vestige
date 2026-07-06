@@ -170,6 +170,10 @@ class Orchestrator:
             model_name = settings.get(model_key)
             if not api_base or not model_name:
                 continue
+            role = "DIRECT" if base_key.startswith("DIRECT") else "SELECTOR"
+            print(
+                f"[Stock Fallback] Trying {role} role (model={model_name}) for: '{raw_text}'"
+            )
             try:
                 extractor = Extractor(
                     {
@@ -180,7 +184,15 @@ class Orchestrator:
                 )
                 result = extractor.classify_stock_status(raw_text)
                 if result is not None:
+                    print(
+                        f"[Stock Fallback] {role} role (model={model_name}) resolved "
+                        f"'{raw_text}' -> {'IN_STOCK' if result else 'OUT_OF_STOCK'}"
+                    )
                     return result
+                print(
+                    f"[Stock Fallback] {role} role (model={model_name}) could not "
+                    f"classify '{raw_text}'"
+                )
             except Exception as e:
                 print(f"[Stock Fallback] {base_key} attempt failed: {e}")
                 continue
