@@ -10,14 +10,16 @@ Vestige is a full-stack system: a Python scraping pipeline, a Java Spring Boot A
 
 Vestige runs a scraping pipeline on a schedule (or on demand via "Run Now"). For each book-store pair it tracks, it determines the fastest route to current availability data:
 
-| Path | Condition | What happens |
-|---|---|---|
-| A | No product URL cached | Crawler searches the store and finds the product page |
-| B | URL found, no selectors, `LLM_MODE=selector` | LLM discovers CSS selectors for price and stock fields |
-| C | URL + selectors cached | Scraper reads directly — no discovery needed |
-| D | URL found, `LLM_MODE=direct` | LLM reads the page HTML directly on every run |
+| Path | Condition                                    | What happens                                           |
+| ---- | -------------------------------------------- | ------------------------------------------------------ |
+| A    | No product URL cached                        | Crawler searches the store and finds the product page  |
+| B    | URL found, no selectors, `LLM_MODE=selector` | LLM discovers CSS selectors for price and stock fields |
+| C    | URL + selectors cached                       | Scraper reads directly — no discovery needed           |
+| D    | URL found, `LLM_MODE=direct`                 | LLM reads the page HTML directly on every run          |
 
 Path C is the production fast path. Paths A and B are one-time setup paths that resolve to C. Path D trades selector maintenance for LLM cost on every run.
+
+> **Crawler scoring is heuristic, not exhaustive.** Path A ranks candidate product-page links using common URL conventions (e.g. `/products/`, `/product/`, `/item/`) seen across the stores Vestige has been tested against. A store with an unusual URL convention can occasionally cause the Crawler to pick the wrong page, or none at all. If a tracked pair's resolved URL doesn't look right (check it on the **Tracking** page), the fix is simple: paste the correct product URL directly into that pair's product URL field — this bypasses the Crawler entirely for that pair going forward.
 
 Every result is written to PostgreSQL as an immutable snapshot row. Status changes surface as OS desktop notifications via the Tauri app.
 
@@ -25,14 +27,14 @@ Every result is written to PostgreSQL as an immutable snapshot row. Status chang
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Scraper pipeline | Python, FastAPI, Playwright, SQLAlchemy |
-| API | Java Spring Boot 4.1, Hibernate (validate-only), PostgreSQL 18 |
-| Desktop UI | Tauri 2.x, React 19, TypeScript |
-| Orchestration | Docker Compose |
-| LLM | Any OpenAI-compatible endpoint (e.g. Groq, free tier) |
-| Cloud deploy (optional) | Terraform — AWS, Azure, GCP |
+| Layer                   | Technology                                                     |
+| ----------------------- | -------------------------------------------------------------- |
+| Scraper pipeline        | Python, FastAPI, Playwright, SQLAlchemy                        |
+| API                     | Java Spring Boot 4.1, Hibernate (validate-only), PostgreSQL 18 |
+| Desktop UI              | Tauri 2.x, React 19, TypeScript                                |
+| Orchestration           | Docker Compose                                                 |
+| LLM                     | Any OpenAI-compatible endpoint (e.g. Groq, free tier)          |
+| Cloud deploy (optional) | Terraform — AWS, Azure, GCP                                    |
 
 ---
 
@@ -81,26 +83,32 @@ Open a terminal in Vestige's app-data folder — this is where the installer see
 - **Linux:** `~/.local/share/vestige/`
 
 **Windows — quickest way to open a terminal there:**
+
 1. Press **Win + R**, type `%APPDATA%\vestige`, and hit Enter — this opens the folder in File Explorer.
 2. Click into the address bar at the top of the Explorer window, type `cmd` (or `pwsh` for PowerShell), and hit Enter. A terminal opens already `cd`'d into that folder.
 
 **Linux:** open a terminal and `cd ~/.local/share/vestige/`.
 
 **Start the stack:**
+
 ```bash
 docker compose up -d
 ```
+
 (Drop the `-d` if you want to watch the container logs live in that same terminal instead of running detached.)
 
 **Stop the stack** (do this whenever you're done using Vestige, since nothing does it automatically if auto-start is off):
+
 ```bash
 docker compose down
 ```
+
 This stops and removes the containers but leaves your database volume intact — your tracked books/history are safe.
 
-> `docker compose down -v` additionally deletes the named volumes tied to *this specific* `docker-compose.yml` — for Vestige, that means wiping the Postgres volume (`postgres_data`), i.e. every book, store, tracking pair, and snapshot you've recorded. It does **not** touch volumes belonging to other Docker Compose projects or containers elsewhere on your machine — the `-v` flag is scoped to the current project, not global — but within that scope it is a full reset of Vestige's own data. Only run it if you actually want to start over from empty.
+> `docker compose down -v` additionally deletes the named volumes tied to _this specific_ `docker-compose.yml` — for Vestige, that means wiping the Postgres volume (`postgres_data`), i.e. every book, store, tracking pair, and snapshot you've recorded. It does **not** touch volumes belonging to other Docker Compose projects or containers elsewhere on your machine — the `-v` flag is scoped to the current project, not global — but within that scope it is a full reset of Vestige's own data. Only run it if you actually want to start over from empty.
 
 **Check the logs** (useful for diagnosing an `ERROR` status or a scrape that isn't behaving):
+
 ```bash
 # All containers, live-following
 docker compose logs -f
@@ -109,6 +117,7 @@ docker compose logs -f
 docker compose logs -f api
 docker compose logs -f scraper-server
 ```
+
 Press **Ctrl+C** to stop following without stopping the containers themselves.
 
 ### 6. Get a free LLM API key (Groq)
@@ -118,41 +127,43 @@ Vestige uses an LLM only for one-time CSS selector discovery per book/store pair
 1. Go to the [Groq Console](https://console.groq.com) and create a free API key.
 2. Check your org's **Organization Limits → Chat Completions** page to see which models are available on the free tier and their rate limits (requests/tokens per minute and per day).
 3. Pick two models:
-   - **Selector discovery (`SELECTOR_MODEL`)** — needs to read a full (if trimmed) HTML product page, so a large context/token budget matters most. `meta-llama/llama-4-scout-17b-16e-instruct` (30K tokens/minute on the free tier) worked reliably in testing.
-   - **Direct extraction (`DIRECT_MODEL`)** — runs on every scrape for Path D pairs, so speed/cost matters more than raw context size. `llama-3.3-70b-versatile` (12K TPM) worked reliably in testing. `groq/compound` looked appealing on paper (70K TPM, no daily token cap) but **did not work** for this role in practice — stick with `llama-3.3-70b-versatile` unless you've specifically re-tested `groq/compound` against your own pages.
+    - **Selector discovery (`SELECTOR_MODEL`)** — needs to read a full (if trimmed) HTML product page, so a large context/token budget matters most. `meta-llama/llama-4-scout-17b-16e-instruct` (30K tokens/minute on the free tier) worked reliably in testing.
+    - **Direct extraction (`DIRECT_MODEL`)** — runs on every scrape for Path D pairs, so speed/cost matters more than raw context size. `llama-3.3-70b-versatile` (12K TPM) worked reliably in testing. `groq/compound` looked appealing on paper (70K TPM, no daily token cap) but **did not work** for this role in practice — stick with `llama-3.3-70b-versatile` unless you've specifically re-tested `groq/compound` against your own pages.
 
-   Both models speak the standard OpenAI chat-completions format, so either works with Vestige's role-based LLM config without any code changes.
+    Both models speak the standard OpenAI chat-completions format, so either works with Vestige's role-based LLM config without any code changes.
 
-   > **Rate limits can surface as pair status, not just an error message.** If you hit a model's requests-per-minute/day or tokens-per-minute/day cap mid-run, a pair can land in `NEEDS_SETUP` (discovery couldn't complete) or stay in `PENDING` (waiting on a run that didn't get to it) instead of the status you expected. If pairs seem stuck, check whether you're bumping into the free-tier limits shown on the Groq Organization Limits page before assuming something's broken.
+    > **Rate limits can surface as pair status, not just an error message.** If you hit a model's requests-per-minute/day or tokens-per-minute/day cap mid-run, a pair can land in `NEEDS_SETUP` (discovery couldn't complete) or stay in `PENDING` (waiting on a run that didn't get to it) instead of the status you expected. If pairs seem stuck, check whether you're bumping into the free-tier limits shown on the Groq Organization Limits page before assuming something's broken.
 
 ### 7. Add your API key and models to Vestige
 
 Pick **one** of these — they have the same effect:
 
 **Option A — Settings page (recommended, no restart needed):**
+
 1. Open Vestige → **Settings**.
 2. Under **Pipeline configuration**, set:
-   - `Selector API Base` → `https://api.groq.com/openai/v1`
-   - `Selector API Key` → your Groq key
-   - `Selector Model` → `meta-llama/llama-4-scout-17b-16e-instruct`
-   - `Direct API Base` → `https://api.groq.com/openai/v1`
-   - `Direct API Key` → your Groq key
-   - `Direct Model` → `llama-3.3-70b-versatile` (or whichever you settled on)
+    - `Selector API Base` → `https://api.groq.com/openai/v1`
+    - `Selector API Key` → your Groq key
+    - `Selector Model` → `meta-llama/llama-4-scout-17b-16e-instruct`
+    - `Direct API Base` → `https://api.groq.com/openai/v1`
+    - `Direct API Key` → your Groq key
+    - `Direct Model` → `llama-3.3-70b-versatile` (or whichever you settled on)
 3. Save. Changes apply on the very next pipeline run — no restart required.
 
 **Option B — Edit `.env` directly:**
+
 1. Open the `.env` file in your app-data folder (same folder as Step 5).
 2. Fill in:
-   ```env
-   SELECTOR_API_BASE=https://api.groq.com/openai/v1
-   SELECTOR_API_KEY=your-groq-key-here
-   SELECTOR_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
-   DIRECT_API_BASE=https://api.groq.com/openai/v1
-   DIRECT_API_KEY=your-groq-key-here
-   DIRECT_MODEL=llama-3.3-70b-versatile
-   LLM_DISCOVERY_ENABLED=true
-   LLM_MODE=selector
-   ```
+    ```env
+    SELECTOR_API_BASE=https://api.groq.com/openai/v1
+    SELECTOR_API_KEY=your-groq-key-here
+    SELECTOR_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+    DIRECT_API_BASE=https://api.groq.com/openai/v1
+    DIRECT_API_KEY=your-groq-key-here
+    DIRECT_MODEL=llama-3.3-70b-versatile
+    LLM_DISCOVERY_ENABLED=true
+    LLM_MODE=selector
+    ```
 3. Restart the app (or restart the Docker stack: `docker compose down && docker compose up -d`) for `.env` changes to take effect — unlike Settings-page changes, these are only read at container startup.
 
 > API keys entered via the Settings page are encrypted at rest (AES-256-GCM) and never echoed back to the UI — only a "configured" indicator and a masked hint are shown.
@@ -204,15 +215,30 @@ Full step-by-step guides for each provider (toolchain setup, credential hardenin
 
 ## Availability States
 
-| Status | Meaning |
-|---|---|
-| `PENDING` | Ready to scrape on the next run |
-| `NEEDS_SETUP` | Product URL found but selectors missing; pipeline paused until selectors are provided |
-| `IN_STOCK` | Currently available |
-| `OUT_OF_STOCK` | Found on the store but currently unavailable |
-| `NOT_LISTED` | Store confirmed not to carry this book |
-| `SKIP` | Manually excluded — never scraped |
-| `ERROR` | Scrape failed (network error, broken selector, etc.) |
+| Status         | Meaning                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `PENDING`      | Ready to scrape on the next run                                                       |
+| `NEEDS_SETUP`  | Product URL found but selectors missing; pipeline paused until selectors are provided |
+| `IN_STOCK`     | Currently available                                                                   |
+| `OUT_OF_STOCK` | Found on the store but currently unavailable                                          |
+| `NOT_LISTED`   | Store confirmed not to carry this book                                                |
+| `SKIP`         | Manually excluded — never scraped                                                     |
+| `ERROR`        | Scrape failed (network error, broken selector, etc.)                                  |
+
+> **Stock-status text that doesn't match a known pattern isn't necessarily an `ERROR`.** Vestige first checks a store's raw availability text (e.g. "In Stock", "Sold Out", "Low stock: 4 left") against a built-in pattern list. If your `SELECTOR_*`/`DIRECT_*` LLM credentials are configured, an unrecognized string is automatically classified by the LLM as a fallback before giving up — a pair only lands in `ERROR` with reason `unparseable_stock_status` if that fallback also can't tell, or no LLM credentials are set at all.
+>
+> If a particular store's phrasing keeps needing the LLM fallback (which costs a request per occurrence), you can teach Vestige the pattern directly instead: add an `"availability-regex"` block to `books_config.json`:
+>
+> ```json
+> {
+>     "availability-regex": {
+>         "in_stock": ["ships in \\d+-\\d+ days"],
+>         "out_of_stock": ["backordered", "discontinued"]
+>     }
+> }
+> ```
+>
+> These are plain regex strings, checked before the LLM fallback is ever tried. They're re-read from the file on every run — no restart or DB wipe needed to pick up an edit.
 
 ---
 
