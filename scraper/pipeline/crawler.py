@@ -153,7 +153,7 @@ class Crawler:
                         "product_url": candidate["url"],
                         "confidence": round(validation["validation_score"] / 9, 2),
                     }
-            except Exception as e:
+            except Exception:
                 pass
         return {"success": False, "product_url": None, "status": "NOT_LISTED"}
 

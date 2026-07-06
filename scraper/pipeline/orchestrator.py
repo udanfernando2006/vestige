@@ -305,7 +305,7 @@ class Orchestrator:
                 isbn=pair["book_isbn"],
                 session=session,
             )
-        except Exception as e:
+        except Exception:
             raise
 
         if not crawl_result or not crawl_result.get("success"):
