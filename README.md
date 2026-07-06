@@ -49,7 +49,13 @@ Docker Engine must be installed and **running** before you launch Vestige.
 - [Download Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows or Linux)
 - Install it, then start it and make sure it's running (check for the whale icon in your system tray / taskbar)
 
-> **System requirements (observed, not a hard spec):** budget a few GB of free disk space just for the Docker images (Postgres, the API, and the Python scraper/Playwright image). At runtime, expect memory usage in the range of ~2.8–2.9GB while a scrape is active — the headless browser (Playwright/Chromium) driving the scraper is the main contributor. This was measured on Windows 11 with 16GB of RAM, where it ran comfortably; on a machine with 8GB or less, keep an eye on Task Manager during your first run.
+> **System requirements (observed, not a hard spec):** budget a few GB of free disk space just for the Docker images (Postgres, the API, and the Python scraper/Playwright image).
+>
+> **On Windows, most of the memory footprint you'll see in Task Manager is Docker Desktop's WSL2 virtual machine (`VmmemWSL`), not Vestige itself.** That process hosts every container Docker Desktop is running on your machine, plus WSL2's own kernel and filesystem cache — so its size reflects your whole Docker/WSL2 setup, not just Vestige. In testing on Windows 11 with 16GB of RAM, `VmmemWSL` idled around ~3.2GB right after a fresh Docker Desktop start (before Vestige's containers had done anything), and rose to ~4GB at peak during an active scrape — so Vestige's own incremental cost was roughly **800MB–1GB on top of whatever your machine's WSL2/Docker Desktop baseline already is**. That idle baseline will vary by machine and by whatever else you're running under WSL2 — it isn't a Vestige-specific cost, and there's no way to give one number that's accurate for every setup.
+>
+> Per-container view (via `docker stats`) during an active scrape: `scraper-server` ~800–830MB (the Playwright/Chromium instance doing the actual crawling — this is the one that moves with scraping activity), `api` ~500MB (flat, regardless of scrape activity), `postgres` ~80MB (flat). Note `docker stats` numbers don't include WSL2's own VM overhead, so they'll always read lower than what Task Manager shows for `VmmemWSL`.
+>
+> On a machine with 8GB of RAM or less, keep an eye on Task Manager during your first run — if your baseline WSL2 footprint is already high before Vestige even starts, that's worth knowing regardless of anything this project does.
 
 ### 2. Download the Vestige installer
 
